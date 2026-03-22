@@ -12,7 +12,7 @@ export default function BottomNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-50">
+    <nav className="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur-md border-t border-stone-200 z-50">
       <div className="flex max-w-2xl mx-auto">
         {tabs.map((tab) => {
           const isActive =
@@ -25,8 +25,8 @@ export default function BottomNav() {
               href={tab.href}
               className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
                 isActive
-                  ? "text-blue-600 border-t-2 border-blue-600"
-                  : "text-gray-500"
+                  ? "text-emerald-700 border-t-2 border-emerald-600"
+                  : "text-stone-400"
               }`}
             >
               {tab.label}

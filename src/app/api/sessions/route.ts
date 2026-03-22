@@ -54,15 +54,13 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const {
-      title,
-      organizer,
-      bankName,
-      bankAccount,
-      qrCodeUrl,
-      transferLink,
-      menuImages,
-    } = body;
+    const title = (body.title || "").trim();
+    const organizer = (body.organizer || "").trim();
+    const bankName = (body.bankName || "").trim();
+    const bankAccount = (body.bankAccount || "").trim();
+    const qrCodeUrl = body.qrCodeUrl;
+    const transferLink = (body.transferLink || "").trim();
+    const menuImages = body.menuImages;
 
     if (!title || !organizer || !bankName || !bankAccount) {
       return NextResponse.json(

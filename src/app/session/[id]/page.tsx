@@ -252,7 +252,7 @@ export default function SessionPage({
   };
 
   const handleReopenSession = async () => {
-    if (!confirm("確定要重新開放訂餐？")) return;
+    if (!confirm("這個按鍵只有團主才能按喔！\n不然開了也沒人處理喲～\n\n確定要重新開放訂餐嗎？")) return;
     try {
       const res = await fetch(`/api/sessions/${id}`, {
         method: "PATCH",
@@ -271,7 +271,12 @@ export default function SessionPage({
   };
 
   const handleDeleteSession = async () => {
-    if (!confirm("確定要刪除此場次嗎？\n此操作將同時刪除所有訂單與付款紀錄，且無法復原！")) return;
+    if (
+      !confirm(
+        "確定要刪除此場次嗎？\n此操作將同時刪除所有訂單與付款紀錄，且無法復原！"
+      )
+    )
+      return;
     if (!confirm("再次確認：真的要永久刪除這個場次嗎？")) return;
     try {
       const res = await fetch(`/api/sessions/${id}`, { method: "DELETE" });
@@ -296,9 +301,12 @@ export default function SessionPage({
     });
   };
 
+  const inputClass =
+    "w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition";
+
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-8 text-center text-gray-500">
+      <div className="max-w-2xl mx-auto px-4 py-12 text-center text-stone-400">
         載入中...
       </div>
     );
@@ -306,7 +314,7 @@ export default function SessionPage({
 
   if (!session) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-8 text-center text-gray-500">
+      <div className="max-w-2xl mx-auto px-4 py-12 text-center text-stone-400">
         找不到此場次
       </div>
     );
@@ -315,24 +323,24 @@ export default function SessionPage({
   const isOpen = session.status === "開放中";
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <button
           onClick={() => router.push("/")}
-          className="text-blue-600 text-sm"
+          className="text-emerald-600 text-sm font-medium"
         >
           &larr; 返回
         </button>
         {lastUpdated && (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-stone-400">
             {fetchError ? "更新失敗，重試中..." : `更新於 ${lastUpdated}`}
           </span>
         )}
       </div>
 
       {/* ① Session Info */}
-      <div className="bg-white rounded-xl shadow-sm border p-4">
+      <div className="bg-white rounded-2xl shadow-sm p-5">
         <div className="flex items-start justify-between">
           {editingTitle ? (
             <form
@@ -361,49 +369,51 @@ export default function SessionPage({
                 type="text"
                 value={titleDraft}
                 onChange={(e) => setTitleDraft(e.target.value)}
-                className="flex-1 border rounded-lg px-2 py-1 text-sm font-bold"
+                className="flex-1 border border-stone-200 rounded-xl px-2 py-1 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-200"
                 autoFocus
                 required
               />
               <button
                 type="submit"
-                className="text-blue-600 text-xs px-2 py-1 border border-blue-200 rounded"
+                className="text-emerald-600 text-xs px-2 py-1 border border-emerald-200 rounded-lg"
               >
                 儲存
               </button>
               <button
                 type="button"
                 onClick={() => setEditingTitle(false)}
-                className="text-gray-500 text-xs px-2 py-1 border rounded"
+                className="text-stone-400 text-xs px-2 py-1 border border-stone-200 rounded-lg"
               >
                 取消
               </button>
             </form>
           ) : (
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold">{session.title}</h1>
+              <h1 className="text-xl font-bold tracking-tight">
+                {session.title}
+              </h1>
               <button
                 onClick={() => {
                   setTitleDraft(session.title);
                   setEditingTitle(true);
                 }}
-                className="text-gray-400 text-xs px-1.5 py-0.5 border rounded"
+                className="text-stone-400 text-xs px-1.5 py-0.5 border border-stone-200 rounded-lg"
               >
                 改標題
               </button>
             </div>
           )}
           <span
-            className={`px-3 py-1 rounded-full text-xs font-medium ${
+            className={`ml-3 px-3 py-1 rounded-full text-xs font-medium ${
               isOpen
-                ? "bg-green-100 text-green-700"
-                : "bg-gray-100 text-gray-500"
+                ? "bg-emerald-50 text-emerald-600"
+                : "bg-stone-100 text-stone-400"
             }`}
           >
             {session.status}
           </span>
         </div>
-        <div className="mt-2 text-sm text-gray-600 space-y-1">
+        <div className="mt-2 text-sm text-stone-500 space-y-0.5">
           <p>負責人：{session.organizer}</p>
           <p>
             收款帳戶：{session.bankName} {session.bankAccount}
@@ -412,12 +422,12 @@ export default function SessionPage({
 
         {/* QR Code */}
         {session.qrCodeUrl && (
-          <div className="mt-3">
-            <p className="text-sm text-gray-500 mb-1">收款 QR Code</p>
+          <div className="mt-4">
+            <p className="text-sm text-stone-400 mb-1">收款 QR Code</p>
             <img
               src={session.qrCodeUrl}
               alt="收款 QR Code"
-              className="h-40 rounded-lg border cursor-pointer"
+              className="h-40 rounded-xl border border-stone-200 cursor-pointer"
               onClick={() => setViewImage(session.qrCodeUrl)}
             />
           </div>
@@ -429,7 +439,7 @@ export default function SessionPage({
             href={session.transferLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium active:bg-green-700"
+            className="mt-3 inline-block bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-medium active:bg-emerald-700"
           >
             點此轉帳
           </a>
@@ -437,8 +447,8 @@ export default function SessionPage({
 
         {/* Menu Images */}
         {session.menuImages && session.menuImages.length > 0 && (
-          <div className="mt-3">
-            <p className="text-sm text-gray-500 mb-1">
+          <div className="mt-4">
+            <p className="text-sm text-stone-400 mb-1">
               菜單（{session.menuImages.length} 張）
             </p>
             <div className="flex gap-2 overflow-x-auto pb-1">
@@ -447,7 +457,7 @@ export default function SessionPage({
                   key={i}
                   src={url}
                   alt={`菜單 ${i + 1}`}
-                  className="h-32 rounded-lg border cursor-pointer shrink-0"
+                  className="h-32 rounded-xl border border-stone-200 cursor-pointer shrink-0"
                   onClick={() => setViewImage(url)}
                 />
               ))}
@@ -460,12 +470,12 @@ export default function SessionPage({
       {isOpen ? (
         <form
           onSubmit={handleAddOrder}
-          className="bg-white rounded-xl shadow-sm border p-4 space-y-3"
+          className="bg-white rounded-2xl shadow-sm p-5 space-y-4"
         >
-          <h2 className="font-semibold">我要訂餐</h2>
+          <h2 className="font-semibold text-lg">我要訂餐</h2>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              你的名字 <span className="text-red-500">*</span>
+            <label className="block text-sm text-stone-500 mb-1">
+              你的名字 <span className="text-rose-400">*</span>
             </label>
             <input
               type="text"
@@ -473,13 +483,13 @@ export default function SessionPage({
               onChange={(e) =>
                 setOrderForm({ ...orderForm, name: e.target.value })
               }
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputClass}
               required
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              品項名稱 <span className="text-red-500">*</span>
+            <label className="block text-sm text-stone-500 mb-1">
+              品項名稱 <span className="text-rose-400">*</span>
             </label>
             <input
               type="text"
@@ -488,13 +498,13 @@ export default function SessionPage({
                 setOrderForm({ ...orderForm, item: e.target.value })
               }
               placeholder="例如：香嫩爌肉飯"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputClass}
               required
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              價格 <span className="text-red-500">*</span>
+            <label className="block text-sm text-stone-500 mb-1">
+              價格 <span className="text-rose-400">*</span>
             </label>
             <input
               type="number"
@@ -503,13 +513,13 @@ export default function SessionPage({
                 setOrderForm({ ...orderForm, price: e.target.value })
               }
               placeholder="例如：100"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputClass}
               min="0"
               required
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">備註</label>
+            <label className="block text-sm text-stone-500 mb-1">備註</label>
             <input
               type="text"
               value={orderForm.note}
@@ -517,36 +527,38 @@ export default function SessionPage({
                 setOrderForm({ ...orderForm, note: e.target.value })
               }
               placeholder="例如：配菜不要芹菜"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputClass}
             />
           </div>
           <button
             type="submit"
             disabled={submitting}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium active:bg-blue-700 disabled:opacity-50"
+            className="w-full bg-emerald-600 text-white py-3 rounded-xl font-medium active:bg-emerald-700 disabled:opacity-50 shadow-sm"
           >
             {submitting ? "送出中..." : "送出訂單"}
           </button>
         </form>
       ) : (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center text-yellow-700 text-sm">
+        <div className="bg-amber-50 rounded-2xl p-4 text-center text-amber-600 text-sm">
           訂餐已截止，無法新增訂單
         </div>
       )}
 
       {/* ③ Order List */}
-      <div className="bg-white rounded-xl shadow-sm border p-4">
-        <h2 className="font-semibold mb-3">訂單列表（{orders.length} 筆）</h2>
+      <div className="bg-white rounded-2xl shadow-sm p-5">
+        <h2 className="font-semibold text-lg mb-3">
+          訂單列表（{orders.length} 筆）
+        </h2>
         {orders.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center py-4">尚無訂單</p>
+          <p className="text-stone-400 text-sm text-center py-6">尚無訂單</p>
         ) : (
-          <div className="divide-y">
+          <div className="divide-y divide-stone-100">
             {orders.map((order) =>
               editingRowIndex === order.rowIndex ? (
                 <form
                   key={order.rowIndex}
                   onSubmit={handleEditOrder}
-                  className="py-3 space-y-2"
+                  className="py-4 space-y-2"
                 >
                   <input
                     type="text"
@@ -554,7 +566,7 @@ export default function SessionPage({
                     onChange={(e) =>
                       setEditForm({ ...editForm, name: e.target.value })
                     }
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    className={inputClass}
                     placeholder="姓名"
                     required
                   />
@@ -564,7 +576,7 @@ export default function SessionPage({
                     onChange={(e) =>
                       setEditForm({ ...editForm, item: e.target.value })
                     }
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    className={inputClass}
                     placeholder="品項"
                     required
                   />
@@ -574,7 +586,7 @@ export default function SessionPage({
                     onChange={(e) =>
                       setEditForm({ ...editForm, price: e.target.value })
                     }
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    className={inputClass}
                     placeholder="價格"
                     min="0"
                     required
@@ -585,43 +597,45 @@ export default function SessionPage({
                     onChange={(e) =>
                       setEditForm({ ...editForm, note: e.target.value })
                     }
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    className={inputClass}
                     placeholder="備註"
                   />
                   <div className="flex gap-2">
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      className="flex-1 bg-emerald-600 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50"
                     >
                       儲存
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditingRowIndex(null)}
-                      className="flex-1 border py-2 rounded-lg text-sm font-medium text-gray-600"
+                      className="flex-1 border border-stone-200 py-2 rounded-xl text-sm font-medium text-stone-500"
                     >
                       取消
                     </button>
                   </div>
                 </form>
               ) : (
-                <div key={order.rowIndex} className="py-3">
+                <div key={order.rowIndex} className="py-3.5">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-sm">
                           {order.name}
                         </span>
-                        <span className="text-gray-300">|</span>
-                        <span className="text-sm">{order.item}</span>
+                        <span className="text-stone-300">|</span>
+                        <span className="text-sm text-stone-600">
+                          {order.item}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-blue-600 font-medium text-sm">
+                        <span className="text-emerald-600 font-medium text-sm">
                           ${order.price}
                         </span>
                         {order.note && (
-                          <span className="text-gray-400 text-xs">
+                          <span className="text-stone-400 text-xs">
                             {order.note}
                           </span>
                         )}
@@ -630,13 +644,13 @@ export default function SessionPage({
                     <div className="flex gap-1 ml-2 shrink-0">
                       <button
                         onClick={() => startEdit(order)}
-                        className="text-blue-600 text-xs px-2 py-1 border border-blue-200 rounded"
+                        className="text-emerald-600 text-xs px-2 py-1 border border-emerald-200 rounded-lg"
                       >
                         編輯
                       </button>
                       <button
                         onClick={() => handleDeleteOrder(order.rowIndex)}
-                        className="text-red-500 text-xs px-2 py-1 border border-red-200 rounded"
+                        className="text-rose-400 text-xs px-2 py-1 border border-rose-200 rounded-lg"
                       >
                         刪除
                       </button>
@@ -651,15 +665,15 @@ export default function SessionPage({
 
       {/* ④ Statistics Summary */}
       {orders.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border p-4">
+        <div className="bg-white rounded-2xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold">統計摘要</h2>
+            <h2 className="font-semibold text-lg">統計摘要</h2>
             <button
               onClick={handleCopySummary}
-              className={`text-xs px-3 py-1 rounded-lg font-medium ${
+              className={`text-xs px-3 py-1.5 rounded-full font-medium transition ${
                 copied
-                  ? "bg-green-100 text-green-700"
-                  : "bg-gray-100 text-gray-600 active:bg-gray-200"
+                  ? "bg-emerald-50 text-emerald-600"
+                  : "bg-stone-100 text-stone-500 active:bg-stone-200"
               }`}
             >
               {copied ? "已複製!" : "複製摘要"}
@@ -672,12 +686,12 @@ export default function SessionPage({
                   <span>
                     {s.item} &times;{s.count}
                   </span>
-                  <span className="text-gray-600">
+                  <span className="text-stone-500">
                     ${s.total.toLocaleString("zh-TW")}
                   </span>
                 </div>
                 {s.notes.length > 0 && (
-                  <div className="text-xs text-gray-400 ml-4">
+                  <div className="text-xs text-stone-400 ml-4">
                     {s.notes.map((n, i) => (
                       <span key={i}>
                         其中 {n.count} 份：{n.text}
@@ -689,7 +703,7 @@ export default function SessionPage({
               </div>
             ))}
           </div>
-          <div className="mt-3 pt-3 border-t font-semibold text-sm flex justify-between">
+          <div className="mt-3 pt-3 border-t border-stone-100 font-semibold text-sm flex justify-between">
             <span>總計 {totalCount} 份</span>
             <span>共 ${totalPrice.toLocaleString("zh-TW")}</span>
           </div>
@@ -700,14 +714,14 @@ export default function SessionPage({
       {isOpen ? (
         <button
           onClick={handleCloseSession}
-          className="w-full bg-red-500 text-white py-3 rounded-xl font-medium active:bg-red-600"
+          className="w-full bg-rose-500 text-white py-3 rounded-2xl font-medium active:bg-rose-600 shadow-sm"
         >
           關閉訂餐
         </button>
       ) : (
         <button
           onClick={handleReopenSession}
-          className="w-full bg-orange-500 text-white py-3 rounded-xl font-medium active:bg-orange-600"
+          className="w-full bg-amber-500 text-white py-3 rounded-2xl font-medium active:bg-amber-600 shadow-sm"
         >
           重新開放訂餐
         </button>
@@ -716,7 +730,7 @@ export default function SessionPage({
       {/* ⑥ Delete Session */}
       <button
         onClick={handleDeleteSession}
-        className="w-full border border-red-300 text-red-500 py-3 rounded-xl text-sm font-medium active:bg-red-50"
+        className="w-full border border-rose-200 text-rose-400 py-3 rounded-2xl text-sm font-medium active:bg-rose-50"
       >
         刪除此場次
       </button>
@@ -736,7 +750,7 @@ export default function SessionPage({
           <img
             src={viewImage}
             alt="放大檢視"
-            className="max-w-full max-h-full object-contain rounded-lg"
+            className="max-w-full max-h-full object-contain rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           />
         </div>

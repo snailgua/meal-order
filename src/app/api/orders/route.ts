@@ -41,7 +41,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { sessionId, name, item, price, note } = body;
+    const sessionId = body.sessionId;
+    const name = (body.name || "").trim();
+    const item = (body.item || "").trim();
+    const price = body.price;
+    const note = (body.note || "").trim();
 
     if (!sessionId || !name || !item || price == null) {
       return NextResponse.json(
@@ -87,7 +91,13 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { rowIndex, sessionId, name, item, price, note, createdAt } = body;
+    const rowIndex = body.rowIndex;
+    const sessionId = body.sessionId;
+    const name = (body.name || "").trim();
+    const item = (body.item || "").trim();
+    const price = body.price;
+    const note = (body.note || "").trim();
+    const createdAt = body.createdAt;
 
     if (!rowIndex || !sessionId || !name || !item || price == null) {
       return NextResponse.json({ error: "缺少必要欄位" }, { status: 400 });

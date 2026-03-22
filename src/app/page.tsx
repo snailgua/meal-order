@@ -108,13 +108,16 @@ export default function HomePage() {
     }
   };
 
+  const inputClass =
+    "w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition";
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold">今日訂餐</h1>
+    <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">癌醫藥劑部吃喝</h1>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium active:bg-blue-700"
+          className="bg-emerald-600 text-white px-4 py-2 rounded-full text-sm font-medium active:bg-emerald-700 shadow-sm"
         >
           {showForm ? "取消" : "開新訂單"}
         </button>
@@ -123,13 +126,13 @@ export default function HomePage() {
       {showForm && (
         <form
           onSubmit={handleCreate}
-          className="bg-white rounded-xl shadow-sm border p-4 mb-4 space-y-3"
+          className="bg-white rounded-2xl shadow-sm p-5 mb-6 space-y-4"
         >
           <h2 className="font-semibold text-lg">建立新訂餐場次</h2>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              訂餐標題 <span className="text-red-500">*</span>
-              <span className="text-gray-400 font-normal ml-1">
+            <label className="block text-sm text-stone-500 mb-1">
+              訂餐標題 <span className="text-rose-400">*</span>
+              <span className="text-stone-400 font-normal ml-1">
                 例如：{todayStr} 午餐 — 池上便當
               </span>
             </label>
@@ -137,69 +140,71 @@ export default function HomePage() {
               type="text"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputClass}
               required
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              負責人姓名 <span className="text-red-500">*</span>
+            <label className="block text-sm text-stone-500 mb-1">
+              負責人姓名 <span className="text-rose-400">*</span>
             </label>
             <input
               type="text"
               value={form.organizer}
               onChange={(e) => setForm({ ...form, organizer: e.target.value })}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputClass}
               required
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              銀行名稱 <span className="text-red-500">*</span>
+            <label className="block text-sm text-stone-500 mb-1">
+              銀行名稱 <span className="text-rose-400">*</span>
             </label>
             <input
               type="text"
               value={form.bankName}
               onChange={(e) => setForm({ ...form, bankName: e.target.value })}
               placeholder="例如：第一銀行"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputClass}
               required
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              銀行帳號 <span className="text-red-500">*</span>
+            <label className="block text-sm text-stone-500 mb-1">
+              銀行帳號 <span className="text-rose-400">*</span>
             </label>
             <input
               type="text"
               value={form.bankAccount}
-              onChange={(e) => setForm({ ...form, bankAccount: e.target.value })}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              onChange={(e) =>
+                setForm({ ...form, bankAccount: e.target.value })
+              }
+              className={inputClass}
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
+            <label className="block text-sm text-stone-500 mb-1">
               收款 QR Code 圖片
             </label>
             <input
               type="file"
               accept="image/*"
               onChange={(e) => setQrCodeFile(e.target.files?.[0] || null)}
-              className="w-full text-sm text-gray-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-600 active:file:bg-blue-100"
+              className="w-full text-sm text-stone-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-600"
             />
             {qrCodeFile && (
               <div className="mt-2 relative inline-block">
                 <img
                   src={URL.createObjectURL(qrCodeFile)}
                   alt="QR Code 預覽"
-                  className="h-24 rounded-lg border"
+                  className="h-24 rounded-xl border border-stone-200"
                 />
                 <button
                   type="button"
                   onClick={() => setQrCodeFile(null)}
-                  className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
+                  className="absolute -top-1.5 -right-1.5 bg-rose-400 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
                 >
                   x
                 </button>
@@ -208,7 +213,7 @@ export default function HomePage() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
+            <label className="block text-sm text-stone-500 mb-1">
               轉帳連結
             </label>
             <input
@@ -218,12 +223,12 @@ export default function HomePage() {
                 setForm({ ...form, transferLink: e.target.value })
               }
               placeholder="銀行 App 深層連結（選填）"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className={inputClass}
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-600 mb-1">
+            <label className="block text-sm text-stone-500 mb-1">
               菜單圖片（可多選）
             </label>
             <input
@@ -233,7 +238,7 @@ export default function HomePage() {
               onChange={(e) =>
                 setMenuFiles(Array.from(e.target.files || []))
               }
-              className="w-full text-sm text-gray-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-600 active:file:bg-blue-100"
+              className="w-full text-sm text-stone-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-600"
             />
             {menuFiles.length > 0 && (
               <div className="mt-2 flex gap-2 overflow-x-auto">
@@ -242,7 +247,7 @@ export default function HomePage() {
                     <img
                       src={URL.createObjectURL(file)}
                       alt={`菜單 ${i + 1}`}
-                      className="h-24 rounded-lg border"
+                      className="h-24 rounded-xl border border-stone-200"
                     />
                     <button
                       type="button"
@@ -251,7 +256,7 @@ export default function HomePage() {
                           prev.filter((_, j) => j !== i)
                         )
                       }
-                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
+                      className="absolute -top-1.5 -right-1.5 bg-rose-400 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
                     >
                       x
                     </button>
@@ -264,45 +269,45 @@ export default function HomePage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium active:bg-blue-700 disabled:opacity-50"
+            className="w-full bg-emerald-600 text-white py-3 rounded-xl font-medium active:bg-emerald-700 disabled:opacity-50 shadow-sm"
           >
-            {submitting
-              ? uploadProgress || "建立中..."
-              : "建立場次"}
+            {submitting ? uploadProgress || "建立中..." : "建立場次"}
           </button>
         </form>
       )}
 
       {loading ? (
-        <p className="text-center text-gray-500 py-8">載入中...</p>
+        <p className="text-center text-stone-400 py-12">載入中...</p>
       ) : sessions.length === 0 ? (
-        <p className="text-center text-gray-500 py-8">今天還沒有訂餐場次</p>
+        <p className="text-center text-stone-400 py-12">今天還沒有訂餐場次</p>
       ) : (
-        <div className="space-y-3">
-          {sessions.map((session) => (
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          {sessions.map((session, i) => (
             <Link
               key={session.id}
               href={`/session/${session.id}`}
               className="block"
             >
-              <div className="bg-white rounded-xl shadow-sm border p-4 active:bg-gray-50">
-                <div className="flex items-start justify-between">
+              <div
+                className={`px-5 py-4 active:bg-stone-50 transition ${
+                  i > 0 ? "border-t border-stone-100" : ""
+                }`}
+              >
+                <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-base truncate">
                       {session.title}
                     </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      負責人：{session.organizer}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      已訂餐：{session.orderCount} 人
+                    <p className="text-sm text-stone-400 mt-0.5">
+                      負責人：{session.organizer}　|　已訂餐：
+                      {session.orderCount} 人
                     </p>
                   </div>
                   <span
-                    className={`ml-2 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                    className={`ml-3 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
                       session.status === "開放中"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-500"
+                        ? "bg-emerald-50 text-emerald-600"
+                        : "bg-stone-100 text-stone-400"
                     }`}
                   >
                     {session.status}

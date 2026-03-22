@@ -38,7 +38,6 @@ export default function PaymentsPage() {
   }, []);
 
   useEffect(() => {
-    // Cleanup old settled records on first load
     fetch("/api/cleanup", { method: "POST" }).catch(() => {});
     fetchPayments();
     const interval = setInterval(fetchPayments, 10000);
@@ -65,7 +64,8 @@ export default function PaymentsPage() {
     action: "payerConfirm" | "receiverConfirm"
   ) => {
     if (action === "receiverConfirm") {
-      if (!confirm("這個按鍵只有開團的人可以點喔！\n確定要確認收到嗎？")) return;
+      if (!confirm("這個按鍵只有開團的人可以點喔！\n確定要確認收到嗎？"))
+        return;
     } else {
       if (!confirm("確定要標記已轉帳？")) return;
     }
@@ -92,44 +92,46 @@ export default function PaymentsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-8 text-center text-gray-500">
+      <div className="max-w-2xl mx-auto px-4 py-12 text-center text-stone-400">
         載入中...
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold">付款追蹤</h1>
+    <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">付款追蹤</h1>
         {lastUpdated && (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-stone-400">
             {fetchError ? "更新失敗，重試中..." : `更新於 ${lastUpdated}`}
           </span>
         )}
       </div>
 
       {groups.length === 0 ? (
-        <p className="text-center text-gray-500 py-8">
+        <p className="text-center text-stone-400 py-12">
           目前沒有未付款的帳款
         </p>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {groups.map((group) => (
-            <div key={group.receiver}>
+            <div
+              key={group.receiver}
+              className="bg-white rounded-2xl shadow-sm overflow-hidden"
+            >
               {/* Receiver header */}
-              <div className="bg-blue-50 border border-blue-200 rounded-t-xl px-4 py-3">
-                <p className="font-semibold text-blue-900">
+              <div className="bg-emerald-50 px-5 py-4">
+                <p className="font-semibold text-emerald-800">
                   收款人：{group.receiver}
                 </p>
-                <p className="text-sm text-blue-700 mt-1">
+                <p className="text-sm text-emerald-600 mt-0.5">
                   {group.bankName} {group.bankAccount}
                 </p>
-                <p className="text-xs text-blue-600 mt-1">
+                <p className="text-xs text-emerald-500 mt-0.5">
                   待收款合計：$
                   {group.totalAmount.toLocaleString("zh-TW")}
                 </p>
-                {/* QR Code & Transfer Link */}
                 {(group.payments[0]?.qrCodeUrl ||
                   group.payments[0]?.transferLink) && (
                   <div className="flex gap-2 mt-2">
@@ -138,7 +140,7 @@ export default function PaymentsPage() {
                         onClick={() =>
                           setShowQrCode(group.payments[0].qrCodeUrl)
                         }
-                        className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium active:bg-blue-700"
+                        className="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700"
                       >
                         查看 QR Code
                       </button>
@@ -148,7 +150,7 @@ export default function PaymentsPage() {
                         href={group.payments[0].transferLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium active:bg-green-700"
+                        className="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700"
                       >
                         點此轉帳
                       </a>
@@ -158,12 +160,11 @@ export default function PaymentsPage() {
               </div>
 
               {/* Payment items */}
-              <div className="border border-t-0 border-gray-200 rounded-b-xl divide-y bg-white">
+              <div className="divide-y divide-stone-100">
                 {group.payments.map((p) => {
                   const isLoading = actionLoading === p.rowIndex;
                   return (
-                    <div key={p.rowIndex} className="p-4">
-                      {/* Payer + item + amount */}
+                    <div key={p.rowIndex} className="px-5 py-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -172,25 +173,24 @@ export default function PaymentsPage() {
                             </span>
                             <StatusBadge payment={p} />
                           </div>
-                          <p className="text-sm text-gray-600 mt-1">
+                          <p className="text-sm text-stone-500 mt-1">
                             {p.item}
                           </p>
                           {p.note && (
-                            <p className="text-xs text-gray-400 mt-0.5">
+                            <p className="text-xs text-stone-400 mt-0.5">
                               備註：{p.note}
                             </p>
                           )}
-                          <p className="text-xs text-gray-400 mt-1">
+                          <p className="text-xs text-stone-400 mt-1">
                             {p.sessionTitle}
                             {p.sessionDate && ` (${p.sessionDate})`}
                           </p>
                         </div>
-                        <span className="text-blue-600 font-semibold text-sm ml-2 shrink-0">
+                        <span className="text-emerald-600 font-semibold text-sm ml-2 shrink-0">
                           ${p.amount.toLocaleString("zh-TW")}
                         </span>
                       </div>
 
-                      {/* Action buttons */}
                       <div className="mt-3 flex gap-2">
                         {!p.payerConfirmed && (
                           <button
@@ -198,7 +198,7 @@ export default function PaymentsPage() {
                               handleAction(p.rowIndex, "payerConfirm")
                             }
                             disabled={isLoading}
-                            className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium active:bg-blue-700 disabled:opacity-50"
+                            className="flex-1 bg-emerald-600 text-white py-2 rounded-xl text-sm font-medium active:bg-emerald-700 disabled:opacity-50"
                           >
                             {isLoading ? "處理中..." : "我已轉帳"}
                           </button>
@@ -209,7 +209,7 @@ export default function PaymentsPage() {
                               handleAction(p.rowIndex, "receiverConfirm")
                             }
                             disabled={isLoading}
-                            className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-medium active:bg-green-700 disabled:opacity-50"
+                            className="flex-1 bg-teal-600 text-white py-2 rounded-xl text-sm font-medium active:bg-teal-700 disabled:opacity-50"
                           >
                             {isLoading ? "處理中..." : "確認收到"}
                           </button>
@@ -239,7 +239,7 @@ export default function PaymentsPage() {
           <img
             src={showQrCode}
             alt="收款 QR Code"
-            className="max-w-full max-h-full object-contain rounded-lg"
+            className="max-w-full max-h-full object-contain rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
@@ -251,20 +251,20 @@ export default function PaymentsPage() {
 function StatusBadge({ payment }: { payment: Payment }) {
   if (payment.payerConfirmed && payment.receiverConfirmed) {
     return (
-      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600">
         已核銷
       </span>
     );
   }
   if (payment.payerConfirmed) {
     return (
-      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-600">
         待確認
       </span>
     );
   }
   return (
-    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-500">
       未付款
     </span>
   );
