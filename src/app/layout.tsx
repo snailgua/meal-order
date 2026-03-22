@@ -3,8 +3,8 @@ import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 
 export const metadata: Metadata = {
-  title: "癌醫藥劑部吃喝",
-  description: "癌醫藥劑部訂餐與對帳系統",
+  title: "NTUCCPharEats",
+  description: "NTUCCPharEats 訂餐與對帳系統",
 };
 
 export default function RootLayout({
