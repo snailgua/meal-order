@@ -202,3 +202,68 @@
 2. **P1（核心）**：付款追蹤頁面 → 雙重確認機制 → 未付款清單
 3. **P2（重要）**：菜單圖片上傳 → QR Code 與轉帳連結 → 訂單編輯/刪除
 4. **P3（Nice to have）**：已核銷紀錄自動清除 → 資料即時輪詢優化
+
+---
+
+## 七、實作狀態與技術備忘（2026-03-22 更新）
+
+### 功能完成度
+
+P0–P3 所有功能皆已完成。
+
+### 實際技術架構
+
+| 項目 | 實際選擇 |
+|------|---------|
+| 框架 | Next.js 16 (App Router, Turbopack) |
+| 語言 | TypeScript |
+| 樣式 | Tailwind CSS v4 |
+| 資料庫 | Google Sheets API (`googleapis` package) |
+| 圖片儲存 | **Google Cloud Storage**（非 Google Drive，Drive 對 Service Account 有 storage quota 限制） |
+| 部署 | Vercel（尚未正式部署） |
+| UI 風格 | emerald/stone 配色，Apple Podcasts 風格，rounded-2xl 卡片 |
+
+### Google Sheets 欄位對照（API 使用 array index，改欄位必須同步改 API）
+
+**訂餐場次表：**
+`[0]場次ID [1]日期 [2]標題 [3]負責人姓名 [4]銀行名稱 [5]銀行帳號 [6]QR Code連結 [7]轉帳連結 [8]狀態 [9]建立時間 [10]菜單圖片連結(逗號分隔)`
+
+**訂單明細表：**
+`[0]場次ID [1]日期 [2]標題 [3]負責人姓名 [4]姓名 [5]品項名稱 [6]價格 [7]備註 [8]建立時間 [9]最後修改時間`
+
+**付款追蹤表：**
+`[0]場次ID [1]日期 [2]標題 [3]付款人姓名 [4]收款人姓名 [5]金額 [6]品項名稱 [7]備註 [8]付款人是否標記已付 [9]收款人是否確認收到 [10]核銷時間`
+
+### 關鍵檔案結構
+
+```
+src/
+├── lib/
+│   ├── sheets.ts          # Google Sheets CRUD（getRows, appendRow, updateRow, deleteRow）
+│   └── storage.ts         # Google Cloud Storage 上傳（uploadFile）
+├── app/
+│   ├── page.tsx           # 首頁：場次列表 + 建立新場次
+│   ├── session/[id]/page.tsx  # 場次詳細：訂餐表單 + 訂單列表 + 統計摘要
+│   ├── payments/page.tsx  # 付款追蹤：未付款清單 + 雙重確認
+│   └── api/
+│       ├── sessions/route.ts      # GET(今日場次), POST(建立)
+│       ├── sessions/[id]/route.ts # GET(單一場次), PATCH(改狀態/標題), DELETE(刪除場次+訂單+付款)
+│       ├── orders/route.ts        # GET, POST, PUT, DELETE
+│       ├── payments/route.ts      # GET(未核銷), PATCH(確認付款/收款)
+│       ├── upload/route.ts        # POST(上傳圖片到 GCS)
+│       └── cleanup/route.ts      # POST(清除 3 個月前已核銷紀錄)
+├── components/
+│   └── BottomNav.tsx      # 底部導覽列
+└── types/
+    └── index.ts           # TypeScript 型別定義
+```
+
+### 已知注意事項
+
+1. **欄位索引硬編碼**：所有 API route 使用 `row[N]` 存取 Google Sheets 欄位，若在 Google Sheets 中新增/刪除/移動欄位，必須同步更新對應的 API route
+2. **圖片需公開讀取**：GCS bucket 必須授予 `allUsers` 為 Storage Object Viewer，否則圖片 URL 會 403
+3. **文字自動 trim**：所有使用者輸入的文字欄位（姓名、品項、備註、標題等）在寫入 Sheets 前會自動 `.trim()`
+4. **信任制操作警告**：「確認收到」和「重新開放訂餐」按鈕會跳 confirm 警告，提醒只有團主/收款人才該點
+5. **Hydration 問題**：若改了 layout 或首頁文字後出現 hydration mismatch，需 `rm -rf .next` 再重啟 dev server
+6. **環境變數**：`.env.local` 包含 `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`, `GCS_BUCKET_NAME`
+7. **localStorage**：使用者名字會存在 `localStorage("userName")` 中，下次自動帶入
