@@ -89,7 +89,7 @@ export default function GuidePage() {
             number={5}
             emoji="&#x1F4CB;"
             title="複製摘要去訂餐"
-            desc="按「複製摘要」，把統計結果貼到訂餐平台"
+            desc="按「複製摘要」，可以直接複製內容方便貼給店家的 LINE"
             isLast
           />
         </div>
