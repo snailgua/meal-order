@@ -93,6 +93,9 @@ export default function GuidePage() {
             isLast
           />
         </div>
+        <p className="text-xs text-stone-400 mt-3 text-center">
+          標題、負責人、收款帳戶都可以隨時點「編輯」修改～
+        </p>
       </div>
 
       {/* ④ 付款流程 */}
@@ -145,9 +148,16 @@ export default function GuidePage() {
             <span className="font-medium">&#x2460;</span> 在場次頁展開「轉錄匯入」
           </p>
           <p className="text-sm text-stone-600">
-            <span className="font-medium">&#x2461;</span> 貼上文字（每行：姓名
-            品項 價格）
+            <span className="font-medium">&#x2461;</span> 貼上文字，支援兩種格式：
           </p>
+          <div className="ml-5 space-y-1">
+            <p className="text-xs text-stone-500">
+              &#x2022; 接龍格式：每行「姓名 品項 價格」
+            </p>
+            <p className="text-xs text-stone-500">
+              &#x2022; 外部平台格式：含「＋收款」分隔的訂單區塊（系統自動偵測）
+            </p>
+          </div>
           <p className="text-sm text-stone-600">
             <span className="font-medium">&#x2462;</span>{" "}
             按「解析文字」預覽，可以逐筆修改
