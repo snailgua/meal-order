@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { Session } from "@/types";
+import { parseTranscriptText, type ParsedOrder } from "@/lib/parseTranscript";
 
 export default function HomePage() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -25,6 +26,11 @@ export default function HomePage() {
   const [qrCodeFile, setQrCodeFile] = useState<File | null>(null);
   const [menuFiles, setMenuFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [transcriptText, setTranscriptText] = useState("");
+  const [parsedOrders, setParsedOrders] = useState<ParsedOrder[]>([]);
+  const [failedLines, setFailedLines] = useState<string[]>([]);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [editingParsedIndex, setEditingParsedIndex] = useState<number | null>(null);
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -85,6 +91,24 @@ export default function HomePage() {
         }),
       });
       if (res.ok) {
+        const sessionData = await res.json();
+
+        // 如果有轉錄訂單，批次匯入
+        if (parsedOrders.length > 0 && sessionData.id) {
+          setUploadProgress(`匯入 ${parsedOrders.length} 筆訂單中...`);
+          const batchRes = await fetch("/api/orders/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sessionId: sessionData.id,
+              orders: parsedOrders,
+            }),
+          });
+          if (!batchRes.ok) {
+            alert("場次已建立，但訂單匯入失敗，請到場次頁重新匯入");
+          }
+        }
+
         setForm({
           title: `${todayStr} `,
           organizer: "",
@@ -94,6 +118,10 @@ export default function HomePage() {
         });
         setQrCodeFile(null);
         setMenuFiles([]);
+        setTranscriptText("");
+        setParsedOrders([]);
+        setFailedLines([]);
+        setShowTranscript(false);
         setShowForm(false);
         fetchSessions();
       } else {
@@ -266,12 +294,176 @@ export default function HomePage() {
             )}
           </div>
 
+          {/* 轉錄匯入區 */}
+          <div className="border border-stone-200 rounded-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowTranscript(!showTranscript)}
+              className="w-full px-4 py-3 flex items-center justify-between text-left bg-stone-50"
+            >
+              <span className="text-sm font-medium text-stone-600">
+                轉錄匯入訂單（選填）
+              </span>
+              <span className="text-stone-400 text-xs">
+                {showTranscript ? "收起" : "展開"}
+              </span>
+            </button>
+            {showTranscript && (
+              <div className="p-4 space-y-3">
+                <p className="text-xs text-stone-400">
+                  貼上接龍或其他系統的訂單文字，建立場次時會一起匯入。也支援「你訂」等平台的付款頁面內容直接複製貼上。
+                </p>
+                <textarea
+                  value={transcriptText}
+                  onChange={(e) => setTranscriptText(e.target.value)}
+                  placeholder={"煜翔 香嫩爌肉飯 100\n子云 烤蒲燒鯛魚飯 110\n欣宜 蜜汁烤雞腿飯 120"}
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition min-h-[100px] resize-y"
+                  rows={5}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const result = parseTranscriptText(transcriptText);
+                    setParsedOrders(result.orders);
+                    setFailedLines(result.failedLines);
+                  }}
+                  disabled={!transcriptText.trim()}
+                  className="w-full bg-stone-100 text-stone-600 py-2 rounded-xl text-sm font-medium active:bg-stone-200 disabled:opacity-40"
+                >
+                  解析文字
+                </button>
+
+                {parsedOrders.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-stone-600">
+                        解析結果（{parsedOrders.length} 筆）
+                      </p>
+                      <p className="text-xs text-stone-400">點擊可編輯</p>
+                    </div>
+                    <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden">
+                      {parsedOrders.map((o, i) =>
+                        editingParsedIndex === i ? (
+                          <div key={i} className="bg-emerald-50/50 px-3 py-2.5 space-y-2">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={o.name}
+                                onChange={(e) => {
+                                  const updated = [...parsedOrders];
+                                  updated[i] = { ...updated[i], name: e.target.value };
+                                  setParsedOrders(updated);
+                                }}
+                                className="flex-1 min-w-0 border border-stone-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                placeholder="姓名"
+                              />
+                              <input
+                                type="text"
+                                value={o.item}
+                                onChange={(e) => {
+                                  const updated = [...parsedOrders];
+                                  updated[i] = { ...updated[i], item: e.target.value };
+                                  setParsedOrders(updated);
+                                }}
+                                className="flex-[2] min-w-0 border border-stone-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                placeholder="品項"
+                              />
+                              <input
+                                type="number"
+                                value={o.price}
+                                onChange={(e) => {
+                                  const updated = [...parsedOrders];
+                                  updated[i] = { ...updated[i], price: Number(e.target.value) };
+                                  setParsedOrders(updated);
+                                }}
+                                className="w-20 border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                placeholder="價格"
+                                min="0"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={o.note}
+                                onChange={(e) => {
+                                  const updated = [...parsedOrders];
+                                  updated[i] = { ...updated[i], note: e.target.value };
+                                  setParsedOrders(updated);
+                                }}
+                                className="flex-1 border border-stone-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                placeholder="備註（選填）"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setEditingParsedIndex(null)}
+                                className="text-emerald-600 text-xs px-3 py-1.5 border border-emerald-200 rounded-lg font-medium"
+                              >
+                                完成
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setParsedOrders(parsedOrders.filter((_, j) => j !== i));
+                                  setEditingParsedIndex(null);
+                                }}
+                                className="text-rose-400 text-xs px-3 py-1.5 border border-rose-200 rounded-lg font-medium"
+                              >
+                                刪除
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            key={i}
+                            className="flex items-center px-3 py-2.5 cursor-pointer active:bg-stone-50"
+                            onClick={() => setEditingParsedIndex(i)}
+                          >
+                            <span className="w-16 shrink-0 text-sm">{o.name}</span>
+                            <span className="flex-1 text-sm text-stone-600 min-w-0 truncate">
+                              {o.item}
+                              {o.note && (
+                                <span className="text-stone-400 text-xs ml-1">（{o.note}）</span>
+                              )}
+                            </span>
+                            <span className="text-emerald-600 text-sm font-medium ml-2 shrink-0">
+                              ${o.price}
+                            </span>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {failedLines.length > 0 && (
+                  <div className="bg-amber-50 rounded-xl p-3 space-y-1">
+                    <p className="text-sm font-medium text-amber-600">
+                      以下 {failedLines.length} 行無法解析：
+                    </p>
+                    {failedLines.map((line, i) => (
+                      <p key={i} className="text-xs text-amber-500 font-mono">
+                        {line}
+                      </p>
+                    ))}
+                    <p className="text-xs text-amber-400 mt-1">
+                      請確認格式為「姓名 品項 價格」，或建立後到場次頁手動新增
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             type="submit"
             disabled={submitting}
             className="w-full bg-emerald-600 text-white py-3 rounded-xl font-medium active:bg-emerald-700 disabled:opacity-50 shadow-sm"
           >
-            {submitting ? uploadProgress || "建立中..." : "建立場次"}
+            {submitting
+              ? uploadProgress || "建立中..."
+              : parsedOrders.length > 0
+                ? `建立場次並匯入 ${parsedOrders.length} 筆訂單`
+                : "建立場次"}
           </button>
         </form>
       )}
