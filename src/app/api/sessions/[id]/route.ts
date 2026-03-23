@@ -57,12 +57,21 @@ export async function PATCH(
 
     const row = rows[dataIndex];
 
-    // Update info fields (title, organizer, bank)
-    if (body.title || body.organizer || body.bankName !== undefined || body.bankAccount !== undefined) {
+    // Update info fields
+    const hasInfoUpdate =
+      body.title || body.organizer ||
+      body.bankName !== undefined || body.bankAccount !== undefined ||
+      body.qrCodeUrl !== undefined || body.transferLink !== undefined ||
+      body.menuImages !== undefined;
+
+    if (hasInfoUpdate) {
       if (body.title) row[2] = body.title;
       if (body.organizer) row[3] = body.organizer;
       if (body.bankName !== undefined) row[4] = body.bankName;
       if (body.bankAccount !== undefined) row[5] = body.bankAccount;
+      if (body.qrCodeUrl !== undefined) row[6] = body.qrCodeUrl;
+      if (body.transferLink !== undefined) row[7] = body.transferLink;
+      if (body.menuImages !== undefined) row[10] = body.menuImages;
       await updateRow("訂餐場次表", dataIndex + 1, row);
       return NextResponse.json({ success: true });
     }

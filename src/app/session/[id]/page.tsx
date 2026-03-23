@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, use } from "react";
+import { useState, useEffect, useCallback, useMemo, use, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { Order } from "@/types";
 
@@ -122,7 +122,14 @@ export default function SessionPage({
     organizer: "",
     bankName: "",
     bankAccount: "",
+    qrCodeUrl: "",
+    transferLink: "",
+    menuImages: [] as string[],
   });
+  const [uploadingQr, setUploadingQr] = useState(false);
+  const [uploadingMenu, setUploadingMenu] = useState(false);
+  const qrInputRef = useRef<HTMLInputElement>(null);
+  const menuInputRef = useRef<HTMLInputElement>(null);
   const [viewImage, setViewImage] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [fetchError, setFetchError] = useState(false);
@@ -623,6 +630,9 @@ export default function SessionPage({
                     organizer: infoDraft.organizer,
                     bankName: infoDraft.bankName,
                     bankAccount: infoDraft.bankAccount,
+                    qrCodeUrl: infoDraft.qrCodeUrl,
+                    transferLink: infoDraft.transferLink,
+                    menuImages: infoDraft.menuImages.join(","),
                   }),
                 });
                 if (res.ok) {
@@ -674,10 +684,157 @@ export default function SessionPage({
                 required
               />
             </div>
+            <div>
+              <label className="block text-xs text-stone-400 mb-1">收款 QR Code</label>
+              {infoDraft.qrCodeUrl ? (
+                <div className="flex items-center gap-2">
+                  <img
+                    src={infoDraft.qrCodeUrl}
+                    alt="QR Code"
+                    className="h-20 rounded-lg border border-stone-200"
+                  />
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => qrInputRef.current?.click()}
+                      disabled={uploadingQr}
+                      className="text-emerald-600 text-xs px-3 py-1.5 border border-emerald-200 rounded-lg disabled:opacity-50"
+                    >
+                      {uploadingQr ? "上傳中..." : "更換"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInfoDraft({ ...infoDraft, qrCodeUrl: "" })}
+                      className="text-rose-400 text-xs px-3 py-1.5 border border-rose-200 rounded-lg"
+                    >
+                      移除
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => qrInputRef.current?.click()}
+                  disabled={uploadingQr}
+                  className="w-full border border-dashed border-stone-300 rounded-xl py-3 text-sm text-stone-400 active:bg-stone-50 disabled:opacity-50"
+                >
+                  {uploadingQr ? "上傳中..." : "上傳 QR Code 圖片"}
+                </button>
+              )}
+              <input
+                ref={qrInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploadingQr(true);
+                  try {
+                    const formData = new FormData();
+                    formData.append("files", file);
+                    const res = await fetch("/api/upload", { method: "POST", body: formData });
+                    if (res.ok) {
+                      const data = await res.json();
+                      setInfoDraft((prev) => ({ ...prev, qrCodeUrl: data.urls[0] }));
+                    } else {
+                      alert("上傳失敗");
+                    }
+                  } catch {
+                    alert("上傳失敗");
+                  } finally {
+                    setUploadingQr(false);
+                    e.target.value = "";
+                  }
+                }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-stone-400 mb-0.5">轉帳連結（選填）</label>
+              <input
+                type="text"
+                value={infoDraft.transferLink}
+                onChange={(e) =>
+                  setInfoDraft({ ...infoDraft, transferLink: e.target.value })
+                }
+                placeholder="銀行 App 深層連結"
+                className="w-full border border-stone-200 rounded-xl px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-stone-400 mb-1">菜單圖片</label>
+              {infoDraft.menuImages.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1 mb-2">
+                  {infoDraft.menuImages.map((url, i) => (
+                    <div key={i} className="relative shrink-0">
+                      <img
+                        src={url}
+                        alt={`菜單 ${i + 1}`}
+                        className="h-20 rounded-lg border border-stone-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setInfoDraft((prev) => ({
+                            ...prev,
+                            menuImages: prev.menuImages.filter((_, j) => j !== i),
+                          }))
+                        }
+                        className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => menuInputRef.current?.click()}
+                disabled={uploadingMenu}
+                className="w-full border border-dashed border-stone-300 rounded-xl py-3 text-sm text-stone-400 active:bg-stone-50 disabled:opacity-50"
+              >
+                {uploadingMenu ? "上傳中..." : "上傳菜單圖片（可多選）"}
+              </button>
+              <input
+                ref={menuInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  if (!files || files.length === 0) return;
+                  setUploadingMenu(true);
+                  try {
+                    const formData = new FormData();
+                    for (const file of Array.from(files)) {
+                      formData.append("files", file);
+                    }
+                    const res = await fetch("/api/upload", { method: "POST", body: formData });
+                    if (res.ok) {
+                      const data = await res.json();
+                      setInfoDraft((prev) => ({
+                        ...prev,
+                        menuImages: [...prev.menuImages, ...data.urls],
+                      }));
+                    } else {
+                      alert("上傳失敗");
+                    }
+                  } catch {
+                    alert("上傳失敗");
+                  } finally {
+                    setUploadingMenu(false);
+                    e.target.value = "";
+                  }
+                }}
+              />
+            </div>
             <div className="flex gap-2">
               <button
                 type="submit"
-                className="text-emerald-600 text-xs px-3 py-1.5 border border-emerald-200 rounded-lg"
+                disabled={uploadingQr || uploadingMenu}
+                className="text-emerald-600 text-xs px-3 py-1.5 border border-emerald-200 rounded-lg disabled:opacity-50"
               >
                 儲存
               </button>
@@ -704,6 +861,9 @@ export default function SessionPage({
                   organizer: session.organizer,
                   bankName: session.bankName,
                   bankAccount: session.bankAccount,
+                  qrCodeUrl: session.qrCodeUrl || "",
+                  transferLink: session.transferLink || "",
+                  menuImages: session.menuImages || [],
                 });
                 setEditingInfo(true);
               }}
