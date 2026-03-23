@@ -142,10 +142,12 @@ export default function GuidePage() {
         </h2>
         <p className="text-sm text-stone-600 leading-relaxed">
           如果已經在 LINE 接龍或其他系統收集好訂單，不用一筆一筆重新輸入！
+          <br />
+          開新訂單時就能一起匯入，或是建立場次後再到場次頁匯入都可以。
         </p>
         <div className="bg-stone-50 rounded-xl p-3 mt-3 space-y-2">
           <p className="text-sm text-stone-600">
-            <span className="font-medium">&#x2460;</span> 在場次頁展開「轉錄匯入」
+            <span className="font-medium">&#x2460;</span> 在「開新訂單」或場次頁展開「轉錄匯入」
           </p>
           <p className="text-sm text-stone-600">
             <span className="font-medium">&#x2461;</span> 貼上文字，支援兩種格式：
