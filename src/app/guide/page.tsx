@@ -61,14 +61,14 @@ export default function GuidePage() {
             number={1}
             emoji="&#x1F4E2;"
             title="團主開單"
-            desc="按「開新訂單」，填寫標題、銀行收款資訊"
+            desc="按「開新訂單」，填寫標題、銀行收款資訊、上傳菜單圖片與收款 QR Code"
           />
           <StepArrow />
           <Step
             number={2}
             emoji="&#x1F517;"
             title="分享連結"
-            desc="把場次連結分享到群組，大家點進去填餐"
+            desc="把場次連結分享到群組，大家可以看菜單圖片、點進去填餐"
           />
           <StepArrow />
           <Step
@@ -94,7 +94,7 @@ export default function GuidePage() {
           />
         </div>
         <p className="text-xs text-stone-400 mt-3 text-center">
-          標題、負責人、收款帳戶都可以隨時點「編輯」修改～
+          標題、負責人、收款帳戶、QR Code、菜單圖片都可以隨時點「編輯」修改～
         </p>
       </div>
 
