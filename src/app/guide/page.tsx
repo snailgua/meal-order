@@ -193,7 +193,19 @@ export default function GuidePage() {
         </a>
       </div>
 
-      {/* ⑦ 信任制提醒 */}
+      {/* ⑦ 回報問題 */}
+      <div className="bg-white rounded-2xl shadow-sm p-5">
+        <h2 className="font-semibold text-lg mb-2">
+          <span className="mr-2">&#x1F4E3;</span>遇到問題？
+        </h2>
+        <p className="text-sm text-stone-600 leading-relaxed">
+          到「回報問題」分頁，選擇問題類型、描述狀況，還可以
+          <strong>上傳截圖</strong>
+          幫助我更快找到問題！
+        </p>
+      </div>
+
+      {/* ⑧ 信任制提醒 */}
       <div className="bg-amber-50 rounded-2xl shadow-sm p-5">
         <h2 className="font-semibold text-lg mb-2 text-amber-700">
           <span className="mr-2">&#x1F91D;</span>信任制小提醒

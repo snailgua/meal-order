@@ -218,7 +218,7 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
 - **自動輪詢**：場次頁與付款頁每 10 秒自動刷新資料，畫面顯示最後更新時間與錯誤狀態。
 - **自動清理**：進入付款追蹤頁時自動呼叫 cleanup API，清除 3 個月前已核銷的紀錄。
 - **使用教學頁面**（`/guide`）：流程圖風格說明訂餐與付款流程，含信任制提醒、Google Sheet 連結。
-- **問題回報頁面**（`/feedback`）：表單寫入 Google Sheets「問題回報表」，問題類型下拉選單（Bug 回報/功能建議/其他）。
+- **問題回報頁面**（`/feedback`）：表單寫入 Google Sheets「問題回報表」，問題類型下拉選單（Bug 回報/功能建議/其他），支援多張截圖上傳（GCS）。
 - **底部導覽列 4 tab**：怎麼用？→ 今日訂餐（預設）→ 付款追蹤 → 回報問題
 - **localStorage 記憶姓名**：使用者名字存在 `localStorage("userName")`，訂餐表單與問題回報表單自動帶入。
 
@@ -231,7 +231,7 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
 | 樣式 | Tailwind CSS v4 |
 | 資料庫 | Google Sheets API (`googleapis` package) |
 | 圖片儲存 | **Google Cloud Storage**（非 Google Drive，Drive 對 Service Account 有 storage quota 限制） |
-| 部署 | Vercel（尚未正式部署） |
+| 部署 | Vercel（已部署） |
 | UI 風格 | emerald/stone 配色，Apple Podcasts 風格，rounded-2xl 卡片 |
 
 ### Google Sheets 欄位對照（API 使用 array index，改欄位必須同步改 API）
@@ -246,7 +246,7 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
 `[0]場次ID [1]日期 [2]標題 [3]付款人姓名 [4]收款人姓名 [5]金額 [6]品項名稱 [7]備註 [8]付款人是否標記已付 [9]收款人是否確認收到 [10]核銷時間`
 
 **問題回報表：**
-`[0]回報時間 [1]姓名 [2]類型 [3]描述`
+`[0]回報時間 [1]姓名 [2]類型 [3]描述 [4]截圖連結(逗號分隔)`
 
 ### 關鍵檔案結構
 
@@ -267,7 +267,7 @@ src/
 │       ├── orders/route.ts        # GET, POST, PUT, DELETE
 │       ├── orders/batch/route.ts  # POST(批次新增訂單，轉錄匯入用)
 │       ├── payments/route.ts      # GET(未核銷), PATCH(確認付款/收款，收款人確認即核銷)
-│       ├── feedback/route.ts      # POST(問題回報寫入 Google Sheets)
+│       ├── feedback/route.ts      # POST(問題回報寫入 Google Sheets，含截圖連結)
 │       ├── upload/route.ts        # POST(上傳圖片到 GCS)
 │       └── cleanup/route.ts      # POST(清除 3 個月前已核銷紀錄)
 ├── components/
