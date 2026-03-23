@@ -122,7 +122,7 @@ export default function GuidePage() {
             number={3}
             emoji="&#x2705;"
             title="按「我已轉帳」"
-            desc="轉完帳後記得回來按一下，讓團主知道"
+            desc="轉完帳後記得回來按一下，讓團主知道（團主也可以直接確認收到）"
           />
           <StepArrow />
           <Step
