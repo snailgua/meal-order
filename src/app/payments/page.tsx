@@ -139,7 +139,7 @@ export default function PaymentsPage() {
                         alert("複製失敗，請手動複製");
                       }
                     }}
-                    className="bg-emerald-600 text-white px-2.5 py-1 rounded-lg text-xs font-medium active:bg-emerald-700 shrink-0"
+                    className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-lg text-xs font-medium active:bg-emerald-200 shrink-0"
                   >
                     複製帳號
                   </button>
