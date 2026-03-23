@@ -66,32 +66,45 @@ export default function GuidePage() {
           <StepArrow />
           <Step
             number={2}
+            emoji="&#x1F4E5;"
+            title="轉錄匯入（選填）"
+            desc="已在 LINE 接龍或「你訂」等平台收集好訂單？展開「轉錄匯入」貼上文字，一起建立！"
+          />
+          <StepArrow />
+          <Step
+            number={3}
             emoji="&#x1F517;"
             title="分享連結"
             desc="把場次連結分享到群組，大家可以看菜單圖片、點進去填餐"
           />
           <StepArrow />
           <Step
-            number={3}
+            number={4}
             emoji="&#x270F;&#xFE0F;"
             title="大家填餐"
-            desc="輸入名字、品項、價格，按送出訂單"
+            desc="輸入名字、品項、價格，按送出訂單（場次頁也可以再轉錄匯入）"
           />
           <StepArrow />
           <Step
-            number={4}
+            number={5}
             emoji="&#x1F512;"
             title="團主關閉訂餐"
             desc="收集完畢後按「關閉訂餐」，系統自動統計"
           />
           <StepArrow />
           <Step
-            number={5}
+            number={6}
             emoji="&#x1F4CB;"
             title="複製摘要去訂餐"
             desc="按「複製摘要」，可以直接複製內容方便貼給店家的 LINE"
             isLast
           />
+        </div>
+        <div className="bg-stone-50 rounded-xl p-3 mt-3 space-y-1.5">
+          <p className="text-xs font-medium text-stone-500">轉錄匯入支援的格式：</p>
+          <p className="text-xs text-stone-400">&#x2022; 接龍格式：每行「姓名 品項 價格」</p>
+          <p className="text-xs text-stone-400">&#x2022; 外部平台：目前支援「你訂」，需要其他平台可以到回報問題跟我說～</p>
+          <p className="text-xs text-stone-400">&#x2022; 多餘空格、$符號、編號等系統都會自動處理，解析後可逐筆修改</p>
         </div>
         <p className="text-xs text-stone-400 mt-3 text-center">
           標題、負責人、收款帳戶、QR Code、菜單圖片都可以隨時點「編輯」修改～
@@ -135,46 +148,7 @@ export default function GuidePage() {
         </div>
       </div>
 
-      {/* ⑤ 轉錄匯入 */}
-      <div className="bg-white rounded-2xl shadow-sm p-5">
-        <h2 className="font-semibold text-lg mb-2">
-          <span className="mr-2">&#x1F4E5;</span>轉錄匯入（團主功能）
-        </h2>
-        <p className="text-sm text-stone-600 leading-relaxed">
-          如果已經在 LINE 接龍或其他系統收集好訂單，不用一筆一筆重新輸入！
-          <br />
-          開新訂單時就能一起匯入，或是建立場次後再到場次頁匯入都可以。
-        </p>
-        <div className="bg-stone-50 rounded-xl p-3 mt-3 space-y-2">
-          <p className="text-sm text-stone-600">
-            <span className="font-medium">&#x2460;</span> 在「開新訂單」或場次頁展開「轉錄匯入」
-          </p>
-          <p className="text-sm text-stone-600">
-            <span className="font-medium">&#x2461;</span> 貼上文字，支援兩種格式：
-          </p>
-          <div className="ml-5 space-y-1">
-            <p className="text-xs text-stone-500">
-              &#x2022; 接龍格式：每行「姓名 品項 價格」
-            </p>
-            <p className="text-xs text-stone-500">
-              &#x2022; 外部平台格式：目前支援「你訂」，其他訂餐系統有需要新增，可以到回報問題的分頁、或直接跟我說～
-            </p>
-          </div>
-          <p className="text-sm text-stone-600">
-            <span className="font-medium">&#x2462;</span>{" "}
-            按「解析文字」預覽，可以逐筆修改
-          </p>
-          <p className="text-sm text-stone-600">
-            <span className="font-medium">&#x2463;</span>{" "}
-            確認無誤後按「全部匯入」搞定！
-          </p>
-        </div>
-        <p className="text-xs text-stone-400 mt-2">
-          多餘的空格、$符號、編號等系統都會自動處理～
-        </p>
-      </div>
-
-      {/* ⑥ 資料存放 */}
+      {/* ⑤ 資料存放 */}
       <div className="bg-white rounded-2xl shadow-sm p-5">
         <h2 className="font-semibold text-lg mb-2">
           <span className="mr-2">&#x1F4CA;</span>資料都存在哪裡？
@@ -195,7 +169,7 @@ export default function GuidePage() {
         </a>
       </div>
 
-      {/* ⑦ 回報問題 */}
+      {/* ⑥ 回報問題 */}
       <div className="bg-white rounded-2xl shadow-sm p-5">
         <h2 className="font-semibold text-lg mb-2">
           <span className="mr-2">&#x1F4E3;</span>遇到問題？
@@ -207,7 +181,7 @@ export default function GuidePage() {
         </p>
       </div>
 
-      {/* ⑧ 信任制提醒 */}
+      {/* ⑦ 信任制提醒 */}
       <div className="bg-amber-50 rounded-2xl shadow-sm p-5">
         <h2 className="font-semibold text-lg mb-2 text-amber-700">
           <span className="mr-2">&#x1F91D;</span>信任制小提醒
