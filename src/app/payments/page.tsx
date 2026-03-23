@@ -126,8 +126,19 @@ export default function PaymentsPage() {
                 <p className="font-semibold text-emerald-800">
                   收款人：{group.receiver}
                 </p>
-                <p className="text-sm text-emerald-600 mt-0.5">
+                <p
+                  className="text-sm text-emerald-600 mt-0.5 cursor-pointer active:text-emerald-800"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(group.bankAccount);
+                      alert("已複製帳號：" + group.bankAccount);
+                    } catch {
+                      alert("複製失敗，請手動複製");
+                    }
+                  }}
+                >
                   {group.bankName} {group.bankAccount}
+                  <span className="text-xs text-emerald-400 ml-1">點擊複製帳號</span>
                 </p>
                 <p className="text-xs text-emerald-500 mt-0.5">
                   待收款合計：$
