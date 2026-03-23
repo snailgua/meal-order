@@ -115,7 +115,7 @@ export default function GuidePage() {
             number={2}
             emoji="&#x1F3E6;"
             title="轉帳給團主"
-            desc="用銀行帳號、QR Code 或轉帳連結付款"
+            desc="用銀行帳號、QR Code 或轉帳連結付款（可點「複製帳號」一鍵複製）"
           />
           <StepArrow />
           <Step
