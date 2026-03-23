@@ -1013,7 +1013,7 @@ export default function SessionPage({
           {showTranscript && (
             <div className="px-5 pb-5 space-y-4">
               <p className="text-xs text-stone-400">
-                貼上接龍或其他系統的訂單文字，每行格式：姓名 品項 價格
+                貼上接龍或其他系統的訂單文字，每行格式：姓名 品項 價格。也支援「你訂」等平台的付款頁面內容直接複製貼上。
               </p>
               <textarea
                 value={transcriptText}
