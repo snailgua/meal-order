@@ -181,7 +181,7 @@
 2. **簡潔直覺**：部門同事非技術人員，介面要直覺好懂，不需要教學就能上手
 3. **中文介面**：所有文字皆為**繁體中文**
 4. **即時更新**：多人同時使用時，訂單列表和統計摘要應即時反映最新資料（透過輪詢或即時同步機制）
-5. **底部導覽列**：兩個主要頁面（今日訂餐 / 付款追蹤）之間用底部 Tab 切換
+5. **底部導覽列**：四個頁面（怎麼用？/ 今日訂餐 / 付款追蹤 / 回報問題）之間用底部 Tab 切換，預設進入「今日訂餐」
 
 ---
 
@@ -205,11 +205,17 @@
 
 ---
 
-## 七、實作狀態與技術備忘（2026-03-22 更新）
+## 七、實作狀態與技術備忘（2026-03-23 更新）
 
 ### 功能完成度
 
-P0–P3 所有功能皆已完成。
+P0–P3 所有功能皆已完成。另外新增以下功能：
+
+- **轉錄匯入**：場次頁可貼上接龍文字（每行「姓名 品項 價格」），智慧解析後批次匯入訂單。支援全形空格、$符號、行首編號、各種分隔符號等容錯處理。解析結果可逐筆編輯、刪除後再匯入。
+- **付款流程簡化**：「我已轉帳」和「確認收到」按鈕同時顯示；團主按「確認收到」即直接核銷，不需付款人先標記。
+- **使用教學頁面**（`/guide`）：流程圖風格說明訂餐與付款流程，含信任制提醒、Google Sheet 連結。
+- **問題回報頁面**（`/feedback`）：表單寫入 Google Sheets「問題回報表」。
+- **底部導覽列 4 tab**：怎麼用？→ 今日訂餐（預設）→ 付款追蹤 → 回報問題
 
 ### 實際技術架構
 
@@ -234,6 +240,9 @@ P0–P3 所有功能皆已完成。
 **付款追蹤表：**
 `[0]場次ID [1]日期 [2]標題 [3]付款人姓名 [4]收款人姓名 [5]金額 [6]品項名稱 [7]備註 [8]付款人是否標記已付 [9]收款人是否確認收到 [10]核銷時間`
 
+**問題回報表：**
+`[0]回報時間 [1]姓名 [2]類型 [3]描述`
+
 ### 關鍵檔案結構
 
 ```
@@ -243,17 +252,21 @@ src/
 │   └── storage.ts         # Google Cloud Storage 上傳（uploadFile）
 ├── app/
 │   ├── page.tsx           # 首頁：場次列表 + 建立新場次
-│   ├── session/[id]/page.tsx  # 場次詳細：訂餐表單 + 訂單列表 + 統計摘要
+│   ├── session/[id]/page.tsx  # 場次詳細：訂餐表單 + 轉錄匯入 + 訂單列表 + 統計摘要
 │   ├── payments/page.tsx  # 付款追蹤：未付款清單 + 雙重確認
+│   ├── guide/page.tsx     # 使用教學頁面
+│   ├── feedback/page.tsx  # 問題回報頁面
 │   └── api/
 │       ├── sessions/route.ts      # GET(今日場次), POST(建立)
 │       ├── sessions/[id]/route.ts # GET(單一場次), PATCH(改狀態/標題), DELETE(刪除場次+訂單+付款)
 │       ├── orders/route.ts        # GET, POST, PUT, DELETE
-│       ├── payments/route.ts      # GET(未核銷), PATCH(確認付款/收款)
+│       ├── orders/batch/route.ts  # POST(批次新增訂單，轉錄匯入用)
+│       ├── payments/route.ts      # GET(未核銷), PATCH(確認付款/收款，收款人確認即核銷)
+│       ├── feedback/route.ts      # POST(問題回報寫入 Google Sheets)
 │       ├── upload/route.ts        # POST(上傳圖片到 GCS)
 │       └── cleanup/route.ts      # POST(清除 3 個月前已核銷紀錄)
 ├── components/
-│   └── BottomNav.tsx      # 底部導覽列
+│   └── BottomNav.tsx      # 底部導覽列（4 tab：怎麼用？/ 今日訂餐 / 付款追蹤 / 回報問題）
 └── types/
     └── index.ts           # TypeScript 型別定義
 ```
@@ -263,7 +276,7 @@ src/
 1. **欄位索引硬編碼**：所有 API route 使用 `row[N]` 存取 Google Sheets 欄位，若在 Google Sheets 中新增/刪除/移動欄位，必須同步更新對應的 API route
 2. **圖片需公開讀取**：GCS bucket 必須授予 `allUsers` 為 Storage Object Viewer，否則圖片 URL 會 403
 3. **文字自動 trim**：所有使用者輸入的文字欄位（姓名、品項、備註、標題等）在寫入 Sheets 前會自動 `.trim()`
-4. **信任制操作警告**：「確認收到」和「重新開放訂餐」按鈕會跳 confirm 警告，提醒只有團主/收款人才該點
+4. **信任制操作警告**：「我已轉帳」會提示付款人姓名確認、「確認收到」和「重新開放訂餐」和「關閉訂餐」按鈕會跳 confirm 警告，提醒只有團主/收款人才該點
 5. **Hydration 問題**：若改了 layout 或首頁文字後出現 hydration mismatch，需 `rm -rf .next` 再重啟 dev server
 6. **環境變數**：`.env.local` 包含 `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`, `GCS_BUCKET_NAME`
 7. **localStorage**：使用者名字會存在 `localStorage("userName")` 中，下次自動帶入

@@ -67,7 +67,8 @@ export default function PaymentsPage() {
       if (!confirm("這個按鍵只有開團的人可以點喔！\n確定要確認收到嗎？"))
         return;
     } else {
-      if (!confirm("確定要標記已轉帳？")) return;
+      const payer = payments.find((p) => p.rowIndex === rowIndex)?.payer;
+      if (!confirm(`你是${payer}嗎？\n確認已經付錢了嗎？`)) return;
     }
 
     setActionLoading(rowIndex);
@@ -203,7 +204,7 @@ export default function PaymentsPage() {
                             {isLoading ? "處理中..." : "我已轉帳"}
                           </button>
                         )}
-                        {p.payerConfirmed && !p.receiverConfirmed && (
+                        {!p.receiverConfirmed && (
                           <button
                             onClick={() =>
                               handleAction(p.rowIndex, "receiverConfirm")

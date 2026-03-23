@@ -7,8 +7,10 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   const tabs = [
+    { href: "/guide", label: "怎麼用？" },
     { href: "/", label: "今日訂餐" },
     { href: "/payments", label: "付款追蹤" },
+    { href: "/feedback", label: "回報問題" },
   ];
 
   return (
@@ -18,7 +20,7 @@ export default function BottomNav() {
           const isActive =
             tab.href === "/"
               ? pathname === "/" || pathname.startsWith("/session")
-              : pathname.startsWith(tab.href);
+              : pathname === tab.href;
           return (
             <Link
               key={tab.href}

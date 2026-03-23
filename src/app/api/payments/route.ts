@@ -109,10 +109,10 @@ export async function PATCH(request: Request) {
           { status: 400 }
         );
       }
+      // 收款人確認即直接核銷（同時標記付款人已付）
+      row[8] = "TRUE";
       row[9] = "TRUE";
-      if (row[8] === "TRUE") {
-        row[10] = new Date().toISOString();
-      }
+      row[10] = new Date().toISOString();
     } else {
       return NextResponse.json({ error: "無效的操作" }, { status: 400 });
     }

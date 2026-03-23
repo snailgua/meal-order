@@ -59,6 +59,16 @@ export default function SessionPage({
     note: "",
   });
 
+  // 轉錄匯入
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [transcriptText, setTranscriptText] = useState("");
+  const [parsedOrders, setParsedOrders] = useState<
+    { name: string; item: string; price: number; note: string }[]
+  >([]);
+  const [failedLines, setFailedLines] = useState<string[]>([]);
+  const [transcriptSubmitting, setTranscriptSubmitting] = useState(false);
+  const [editingParsedIndex, setEditingParsedIndex] = useState<number | null>(null);
+
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
     if (savedName) {
@@ -233,7 +243,7 @@ export default function SessionPage({
   };
 
   const handleCloseSession = async () => {
-    if (!confirm("確定要關閉訂餐？關閉後將無法新增訂單。")) return;
+    if (!confirm("你是團主嗎？團主才能按關閉訂單哦～請不要亂按關閉訂單。\n\n確定要關閉訂餐？關閉後將無法新增訂單。")) return;
     try {
       const res = await fetch(`/api/sessions/${id}`, {
         method: "PATCH",
@@ -299,6 +309,99 @@ export default function SessionPage({
       price: String(order.price),
       note: order.note,
     });
+  };
+
+  const parseTranscript = () => {
+    const lines = transcriptText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const results: { name: string; item: string; price: number; note: string }[] = [];
+    const failed: string[] = [];
+
+    for (const rawLine of lines) {
+      let line = rawLine;
+
+      // 1. 移除行首編號（例如 "1." "1、" "1:" "1)" "#1"）
+      line = line.replace(/^[#＃]?\d+[.、:：)\]）】]\s*/, "");
+
+      // 2. 全形空格轉半形、全形數字轉半形
+      line = line.replace(/\u3000/g, " ");
+      line = line.replace(/[０-９]/g, (c) =>
+        String.fromCharCode(c.charCodeAt(0) - 0xff10 + 0x30)
+      );
+
+      // 3. 統一分隔符號：把常見分隔符（：、:、—、–、-、|、／、/、,、，）換成空格
+      //    但保留品項名稱中可能出現的「-」（如 7-11），所以只替換前後有空格的或在姓名與品項間的
+      line = line.replace(/[：:—–|／,，]\s*/g, " ");
+
+      // 4. 移除價格的 $ ＄ NT NT$ 前綴
+      line = line.replace(/(?:NT\$?|＄|\$)\s*(\d+)/gi, "$1");
+
+      // 5. 移除「元」「塊」後綴
+      line = line.replace(/(\d+)\s*[元塊]/, "$1");
+
+      // 6. 用空白分割
+      const tokens = line.split(/\s+/).filter((t) => t.length > 0);
+      if (tokens.length < 3) {
+        failed.push(rawLine);
+        continue;
+      }
+
+      const name = tokens[0];
+
+      // 從最後面找價格（純數字的 token）
+      let priceIndex = -1;
+      for (let i = tokens.length - 1; i >= 2; i--) {
+        if (/^\d+$/.test(tokens[i])) {
+          priceIndex = i;
+          break;
+        }
+      }
+      if (priceIndex < 2) {
+        failed.push(rawLine);
+        continue;
+      }
+
+      const item = tokens.slice(1, priceIndex).join(" ");
+      const price = Number(tokens[priceIndex]);
+
+      // priceIndex 之後的 token 當作備註
+      const note = tokens.slice(priceIndex + 1).join(" ");
+
+      results.push({ name, item, price, note });
+    }
+
+    setParsedOrders(results);
+    setFailedLines(failed);
+  };
+
+  const handleTranscriptImport = async () => {
+    if (parsedOrders.length === 0) return;
+    setTranscriptSubmitting(true);
+    try {
+      const res = await fetch("/api/orders/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: id, orders: parsedOrders }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(`成功匯入 ${data.created} 筆訂單！`);
+        setTranscriptText("");
+        setParsedOrders([]);
+        setShowTranscript(false);
+        fetchData();
+      } else {
+        const data = await res.json();
+        alert(data.error || "匯入失敗");
+      }
+    } catch {
+      alert("網路錯誤，請稍後再試");
+    } finally {
+      setTranscriptSubmitting(false);
+    }
   };
 
   const inputClass =
@@ -541,6 +644,169 @@ export default function SessionPage({
       ) : (
         <div className="bg-amber-50 rounded-2xl p-4 text-center text-amber-600 text-sm">
           訂餐已截止，無法新增訂單
+        </div>
+      )}
+
+      {/* 轉錄匯入區 */}
+      {isOpen && (
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <button
+            onClick={() => setShowTranscript(!showTranscript)}
+            className="w-full px-5 py-4 flex items-center justify-between text-left"
+          >
+            <span className="font-semibold text-base">轉錄匯入</span>
+            <span className="text-stone-400 text-sm">
+              {showTranscript ? "收起" : "展開"}
+            </span>
+          </button>
+          {showTranscript && (
+            <div className="px-5 pb-5 space-y-4">
+              <p className="text-xs text-stone-400">
+                貼上接龍或其他系統的訂單文字，每行格式：姓名 品項 價格
+              </p>
+              <textarea
+                value={transcriptText}
+                onChange={(e) => setTranscriptText(e.target.value)}
+                placeholder={"煜翔 香嫩爌肉飯 100\n子云 烤蒲燒鯛魚飯 110\n欣宜 蜜汁烤雞腿飯 120"}
+                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition min-h-[120px] resize-y"
+                rows={6}
+              />
+              <button
+                onClick={parseTranscript}
+                disabled={!transcriptText.trim()}
+                className="w-full bg-stone-100 text-stone-600 py-2.5 rounded-xl text-sm font-medium active:bg-stone-200 disabled:opacity-40"
+              >
+                解析文字
+              </button>
+
+              {parsedOrders.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-stone-600">
+                      解析結果（{parsedOrders.length} 筆）
+                    </p>
+                    <p className="text-xs text-stone-400">點擊可編輯</p>
+                  </div>
+                  <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden">
+                    {parsedOrders.map((o, i) =>
+                      editingParsedIndex === i ? (
+                        <div key={i} className="bg-emerald-50/50 px-3 py-2.5 space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={o.name}
+                              onChange={(e) => {
+                                const updated = [...parsedOrders];
+                                updated[i] = { ...updated[i], name: e.target.value };
+                                setParsedOrders(updated);
+                              }}
+                              className="flex-1 min-w-0 border border-stone-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                              placeholder="姓名"
+                            />
+                            <input
+                              type="text"
+                              value={o.item}
+                              onChange={(e) => {
+                                const updated = [...parsedOrders];
+                                updated[i] = { ...updated[i], item: e.target.value };
+                                setParsedOrders(updated);
+                              }}
+                              className="flex-[2] min-w-0 border border-stone-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                              placeholder="品項"
+                            />
+                            <input
+                              type="number"
+                              value={o.price}
+                              onChange={(e) => {
+                                const updated = [...parsedOrders];
+                                updated[i] = { ...updated[i], price: Number(e.target.value) };
+                                setParsedOrders(updated);
+                              }}
+                              className="w-20 border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                              placeholder="價格"
+                              min="0"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={o.note}
+                              onChange={(e) => {
+                                const updated = [...parsedOrders];
+                                updated[i] = { ...updated[i], note: e.target.value };
+                                setParsedOrders(updated);
+                              }}
+                              className="flex-1 border border-stone-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                              placeholder="備註（選填）"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setEditingParsedIndex(null)}
+                              className="text-emerald-600 text-xs px-3 py-1.5 border border-emerald-200 rounded-lg font-medium"
+                            >
+                              完成
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setParsedOrders(parsedOrders.filter((_, j) => j !== i));
+                                setEditingParsedIndex(null);
+                              }}
+                              className="text-rose-400 text-xs px-3 py-1.5 border border-rose-200 rounded-lg font-medium"
+                            >
+                              刪除
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          key={i}
+                          className="flex items-center px-3 py-2.5 cursor-pointer active:bg-stone-50"
+                          onClick={() => setEditingParsedIndex(i)}
+                        >
+                          <span className="w-16 shrink-0 text-sm">{o.name}</span>
+                          <span className="flex-1 text-sm text-stone-600 min-w-0 truncate">
+                            {o.item}
+                            {o.note && (
+                              <span className="text-stone-400 text-xs ml-1">（{o.note}）</span>
+                            )}
+                          </span>
+                          <span className="text-emerald-600 text-sm font-medium ml-2 shrink-0">
+                            ${o.price}
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                  <button
+                    onClick={handleTranscriptImport}
+                    disabled={transcriptSubmitting}
+                    className="w-full bg-emerald-600 text-white py-3 rounded-xl font-medium active:bg-emerald-700 disabled:opacity-50 shadow-sm"
+                  >
+                    {transcriptSubmitting
+                      ? "匯入中..."
+                      : `全部匯入（${parsedOrders.length} 筆）`}
+                  </button>
+                </div>
+              )}
+
+              {failedLines.length > 0 && (
+                <div className="bg-amber-50 rounded-xl p-3 space-y-1">
+                  <p className="text-sm font-medium text-amber-600">
+                    以下 {failedLines.length} 行無法解析：
+                  </p>
+                  {failedLines.map((line, i) => (
+                    <p key={i} className="text-xs text-amber-500 font-mono">
+                      {line}
+                    </p>
+                  ))}
+                  <p className="text-xs text-amber-400 mt-1">
+                    請確認格式為「姓名 品項 價格」，或手動新增這幾筆
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
