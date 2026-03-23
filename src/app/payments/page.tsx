@@ -240,7 +240,7 @@ export default function PaymentsPage() {
           <img
             src={showQrCode}
             alt="收款 QR Code"
-            className="max-w-full max-h-full object-contain rounded-2xl"
+            className="max-w-sm max-h-[70vh] object-contain rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
