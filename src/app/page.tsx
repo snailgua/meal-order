@@ -311,7 +311,9 @@ export default function HomePage() {
             {showTranscript && (
               <div className="p-4 space-y-3">
                 <p className="text-xs text-stone-400">
-                  貼上接龍或其他系統的訂單文字，建立場次時會一起匯入。也支援「你訂」等平台的付款頁面內容直接複製貼上。
+                  貼上接龍或其他系統的訂單文字，建立場次時會一起匯入。
+                  <br />
+                  也支援「你訂」平台的付款頁面內容直接複製貼上。
                 </p>
                 <textarea
                   value={transcriptText}
