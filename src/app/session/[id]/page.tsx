@@ -117,6 +117,12 @@ export default function SessionPage({
   const [copied, setCopied] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+  const [editingInfo, setEditingInfo] = useState(false);
+  const [infoDraft, setInfoDraft] = useState({
+    organizer: "",
+    bankName: "",
+    bankAccount: "",
+  });
   const [viewImage, setViewImage] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [fetchError, setFetchError] = useState(false);
@@ -605,12 +611,108 @@ export default function SessionPage({
             {session.status}
           </span>
         </div>
-        <div className="mt-2 text-sm text-stone-500 space-y-0.5">
-          <p>負責人：{session.organizer}</p>
-          <p>
-            收款帳戶：{session.bankName} {session.bankAccount}
-          </p>
-        </div>
+        {editingInfo ? (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                const res = await fetch(`/api/sessions/${id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    organizer: infoDraft.organizer,
+                    bankName: infoDraft.bankName,
+                    bankAccount: infoDraft.bankAccount,
+                  }),
+                });
+                if (res.ok) {
+                  setEditingInfo(false);
+                  fetchData();
+                } else {
+                  const data = await res.json();
+                  alert(data.error || "更新失敗");
+                }
+              } catch {
+                alert("網路錯誤，請稍後再試");
+              }
+            }}
+            className="mt-3 space-y-2"
+          >
+            <div>
+              <label className="block text-xs text-stone-400 mb-0.5">負責人</label>
+              <input
+                type="text"
+                value={infoDraft.organizer}
+                onChange={(e) =>
+                  setInfoDraft({ ...infoDraft, organizer: e.target.value })
+                }
+                className="w-full border border-stone-200 rounded-xl px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-stone-400 mb-0.5">銀行名稱</label>
+              <input
+                type="text"
+                value={infoDraft.bankName}
+                onChange={(e) =>
+                  setInfoDraft({ ...infoDraft, bankName: e.target.value })
+                }
+                className="w-full border border-stone-200 rounded-xl px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-stone-400 mb-0.5">銀行帳號</label>
+              <input
+                type="text"
+                value={infoDraft.bankAccount}
+                onChange={(e) =>
+                  setInfoDraft({ ...infoDraft, bankAccount: e.target.value })
+                }
+                className="w-full border border-stone-200 rounded-xl px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                required
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="text-emerald-600 text-xs px-3 py-1.5 border border-emerald-200 rounded-lg"
+              >
+                儲存
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingInfo(false)}
+                className="text-stone-400 text-xs px-3 py-1.5 border border-stone-200 rounded-lg"
+              >
+                取消
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="mt-2 text-sm text-stone-500 space-y-0.5 flex items-start justify-between">
+            <div>
+              <p>負責人：{session.organizer}</p>
+              <p>
+                收款帳戶：{session.bankName} {session.bankAccount}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setInfoDraft({
+                  organizer: session.organizer,
+                  bankName: session.bankName,
+                  bankAccount: session.bankAccount,
+                });
+                setEditingInfo(true);
+              }}
+              className="text-stone-400 text-xs px-1.5 py-0.5 border border-stone-200 rounded-lg shrink-0"
+            >
+              編輯
+            </button>
+          </div>
+        )}
 
         {/* QR Code */}
         {session.qrCodeUrl && (

@@ -57,9 +57,12 @@ export async function PATCH(
 
     const row = rows[dataIndex];
 
-    // Update title
-    if (body.title && body.title !== row[2]) {
-      row[2] = body.title;
+    // Update info fields (title, organizer, bank)
+    if (body.title || body.organizer || body.bankName !== undefined || body.bankAccount !== undefined) {
+      if (body.title) row[2] = body.title;
+      if (body.organizer) row[3] = body.organizer;
+      if (body.bankName !== undefined) row[4] = body.bankName;
+      if (body.bankAccount !== undefined) row[5] = body.bankAccount;
       await updateRow("訂餐場次表", dataIndex + 1, row);
       return NextResponse.json({ success: true });
     }
