@@ -61,7 +61,7 @@ export default function GuidePage() {
             number={1}
             emoji="&#x1F4E2;"
             title="團主開單"
-            desc="按「開新訂單」，填寫標題、銀行收款資訊、上傳菜單圖片與收款 QR Code"
+            desc="按「開新訂單」，填寫標題、銀行收款資訊（可上傳 QR Code）、上傳菜單圖片"
           />
           <StepArrow />
           <Step
@@ -155,7 +155,7 @@ export default function GuidePage() {
               &#x2022; 接龍格式：每行「姓名 品項 價格」
             </p>
             <p className="text-xs text-stone-500">
-              &#x2022; 外部平台格式：含「＋收款」分隔的訂單區塊（系統自動偵測）
+              &#x2022; 外部平台格式：目前支援「你訂」，其他訂餐系統如果有需要，再到回報問題的分頁，或直接跟我說～
             </p>
           </div>
           <p className="text-sm text-stone-600">
