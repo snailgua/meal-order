@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function FeedbackPage() {
   const [form, setForm] = useState({
@@ -10,6 +10,9 @@ export default function FeedbackPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
@@ -25,11 +28,12 @@ export default function FeedbackPage() {
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, imageUrls: imageUrls.join(",") }),
       });
       if (res.ok) {
         setSubmitted(true);
         setForm((prev) => ({ ...prev, type: "Bug 回報", description: "" }));
+        setImageUrls([]);
       } else {
         const data = await res.json();
         alert(data.error || "送出失敗");
@@ -116,9 +120,78 @@ export default function FeedbackPage() {
             />
           </div>
 
+          <div>
+            <label className="block text-sm text-stone-500 mb-1">
+              截圖（選填，可多張）
+            </label>
+            {imageUrls.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1 mb-2">
+                {imageUrls.map((url, i) => (
+                  <div key={i} className="relative shrink-0">
+                    <img
+                      src={url}
+                      alt={`截圖 ${i + 1}`}
+                      className="h-20 rounded-lg border border-stone-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setImageUrls((prev) => prev.filter((_, j) => j !== i))
+                      }
+                      className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="w-full border border-dashed border-stone-300 rounded-xl py-3 text-sm text-stone-400 active:bg-stone-50 disabled:opacity-50"
+            >
+              {uploading ? "上傳中..." : "上傳截圖"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={async (e) => {
+                const files = e.target.files;
+                if (!files || files.length === 0) return;
+                setUploading(true);
+                try {
+                  const formData = new FormData();
+                  for (const file of Array.from(files)) {
+                    formData.append("files", file);
+                  }
+                  const res = await fetch("/api/upload", {
+                    method: "POST",
+                    body: formData,
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    setImageUrls((prev) => [...prev, ...data.urls]);
+                  } else {
+                    alert("上傳失敗");
+                  }
+                } catch {
+                  alert("上傳失敗");
+                } finally {
+                  setUploading(false);
+                  e.target.value = "";
+                }
+              }}
+            />
+          </div>
+
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || uploading}
             className="w-full bg-emerald-600 text-white py-3 rounded-xl font-medium active:bg-emerald-700 disabled:opacity-50 shadow-sm"
           >
             {submitting ? "送出中..." : "送出回報"}

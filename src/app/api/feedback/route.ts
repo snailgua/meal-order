@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { appendRow } from "@/lib/sheets";
 
 // 問題回報表 column layout:
-// [0]回報時間 [1]姓名 [2]類型 [3]描述
+// [0]回報時間 [1]姓名 [2]類型 [3]描述 [4]截圖連結(逗號分隔)
 
 export async function POST(request: Request) {
   try {
@@ -18,8 +18,10 @@ export async function POST(request: Request) {
       );
     }
 
+    const imageUrls = (body.imageUrls || "").trim();
+
     const now = new Date().toISOString();
-    await appendRow("問題回報表", [now, name, type, description]);
+    await appendRow("問題回報表", [now, name, type, description, imageUrls]);
 
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
