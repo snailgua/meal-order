@@ -188,65 +188,83 @@ export default function PaymentsPage() {
                 )}
               </div>
 
-              {/* Payment items */}
+              {/* Payment items grouped by payer */}
               <div className="divide-y divide-stone-100">
-                {group.payments.map((p) => {
-                  const isLoading = actionLoading === p.rowIndex;
-                  return (
-                    <div key={p.rowIndex} className="px-5 py-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-sm">
-                              {p.payer}
-                            </span>
-                            <StatusBadge payment={p} />
-                          </div>
-                          <p className="text-sm text-stone-500 mt-1">
-                            {p.item}
-                          </p>
-                          {p.note && (
-                            <p className="text-xs text-stone-400 mt-0.5">
-                              備註：{p.note}
-                            </p>
-                          )}
-                          <p className="text-xs text-stone-400 mt-1">
-                            {p.sessionTitle}
-                            {p.sessionDate && ` (${p.sessionDate})`}
-                          </p>
+                {(() => {
+                  const payerGroups: { payer: string; items: Payment[] }[] = [];
+                  for (const p of group.payments) {
+                    const last = payerGroups[payerGroups.length - 1];
+                    if (last && last.payer === p.payer) {
+                      last.items.push(p);
+                    } else {
+                      payerGroups.push({ payer: p.payer, items: [p] });
+                    }
+                  }
+                  return payerGroups.map((pg) => {
+                    const payerTotal = pg.items.reduce((s, p) => s + p.amount, 0);
+                    return (
+                      <div key={pg.payer} className="px-5 py-4">
+                        {/* Payer name + total */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-bold text-sm">{pg.payer}</span>
+                          <span className="text-emerald-600 font-semibold text-sm">
+                            合計 ${payerTotal.toLocaleString("zh-TW")}
+                          </span>
                         </div>
-                        <span className="text-emerald-600 font-semibold text-sm ml-2 shrink-0">
-                          ${p.amount.toLocaleString("zh-TW")}
-                        </span>
+                        {/* Individual items */}
+                        <div className="space-y-3">
+                          {pg.items.map((p) => {
+                            const isLoading = actionLoading === p.rowIndex;
+                            return (
+                              <div key={p.rowIndex} className="pl-3 border-l-2 border-stone-200">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-sm text-stone-700">{p.item}</span>
+                                      <StatusBadge payment={p} />
+                                    </div>
+                                    {p.note && (
+                                      <p className="text-xs text-stone-400 mt-0.5">
+                                        備註：{p.note}
+                                      </p>
+                                    )}
+                                    <p className="text-xs text-stone-400 mt-0.5">
+                                      {p.sessionTitle}
+                                      {p.sessionDate && ` (${p.sessionDate})`}
+                                    </p>
+                                  </div>
+                                  <span className="text-emerald-600 font-medium text-sm ml-2 shrink-0">
+                                    ${p.amount.toLocaleString("zh-TW")}
+                                  </span>
+                                </div>
+                                <div className="mt-2 flex gap-2">
+                                  {!p.payerConfirmed && (
+                                    <button
+                                      onClick={() => handleAction(p.rowIndex, "payerConfirm")}
+                                      disabled={isLoading}
+                                      className="flex-1 bg-emerald-600 text-white py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700 disabled:opacity-50"
+                                    >
+                                      {isLoading ? "處理中..." : "我已轉帳"}
+                                    </button>
+                                  )}
+                                  {!p.receiverConfirmed && (
+                                    <button
+                                      onClick={() => handleAction(p.rowIndex, "receiverConfirm")}
+                                      disabled={isLoading}
+                                      className="flex-1 bg-teal-600 text-white py-1.5 rounded-xl text-xs font-medium active:bg-teal-700 disabled:opacity-50"
+                                    >
+                                      {isLoading ? "處理中..." : "確認收到"}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-
-                      <div className="mt-3 flex gap-2">
-                        {!p.payerConfirmed && (
-                          <button
-                            onClick={() =>
-                              handleAction(p.rowIndex, "payerConfirm")
-                            }
-                            disabled={isLoading}
-                            className="flex-1 bg-emerald-600 text-white py-2 rounded-xl text-sm font-medium active:bg-emerald-700 disabled:opacity-50"
-                          >
-                            {isLoading ? "處理中..." : "我已轉帳"}
-                          </button>
-                        )}
-                        {!p.receiverConfirmed && (
-                          <button
-                            onClick={() =>
-                              handleAction(p.rowIndex, "receiverConfirm")
-                            }
-                            disabled={isLoading}
-                            className="flex-1 bg-teal-600 text-white py-2 rounded-xl text-sm font-medium active:bg-teal-700 disabled:opacity-50"
-                          >
-                            {isLoading ? "處理中..." : "確認收到"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             </div>
           ))}
