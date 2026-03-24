@@ -53,10 +53,12 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     await appendRow("問題回報表", [now, name, type, description, imageUrls]);
 
-    // Send email notification (non-blocking, don't fail the request)
-    sendNotificationEmail(name, type, description, imageUrls).catch((err) =>
-      console.error("Failed to send notification email:", err)
-    );
+    // Send email notification (await so it completes before serverless function exits)
+    try {
+      await sendNotificationEmail(name, type, description, imageUrls);
+    } catch (err) {
+      console.error("Failed to send notification email:", err);
+    }
 
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
