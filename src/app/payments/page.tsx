@@ -207,7 +207,7 @@ export default function PaymentsPage() {
                         {/* Payer name + total */}
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-bold text-sm">{pg.payer}</span>
-                          <span className="text-emerald-600 font-semibold text-sm">
+                          <span className="text-emerald-700 font-bold text-base">
                             合計 ${payerTotal.toLocaleString("zh-TW")}
                           </span>
                         </div>
@@ -233,7 +233,7 @@ export default function PaymentsPage() {
                                       {p.sessionDate && ` (${p.sessionDate})`}
                                     </p>
                                   </div>
-                                  <span className="text-emerald-600 font-medium text-sm ml-2 shrink-0">
+                                  <span className="text-stone-400 text-xs ml-2 shrink-0">
                                     ${p.amount.toLocaleString("zh-TW")}
                                   </span>
                                 </div>
