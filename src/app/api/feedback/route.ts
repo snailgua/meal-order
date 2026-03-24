@@ -1,8 +1,38 @@
 import { NextResponse } from "next/server";
+import nodemailer from "nodemailer";
 import { appendRow } from "@/lib/sheets";
 
 // 問題回報表 column layout:
 // [0]回報時間 [1]姓名 [2]類型 [3]描述 [4]截圖連結(逗號分隔)
+
+async function sendNotificationEmail(
+  name: string,
+  type: string,
+  description: string,
+  imageUrls: string
+) {
+  const email = process.env.SMTP_EMAIL;
+  const password = process.env.SMTP_PASSWORD;
+  const notifyTo = process.env.NOTIFICATION_EMAIL;
+
+  if (!email || !password || !notifyTo) return;
+
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: email, pass: password },
+  });
+
+  const imageSection = imageUrls
+    ? `\n\n截圖：\n${imageUrls.split(",").join("\n")}`
+    : "";
+
+  await transporter.sendMail({
+    from: email,
+    to: notifyTo,
+    subject: `[訂餐系統回報] ${type} — ${name}`,
+    text: `回報人：${name}\n類型：${type}\n\n${description}${imageSection}`,
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -22,6 +52,11 @@ export async function POST(request: Request) {
 
     const now = new Date().toISOString();
     await appendRow("問題回報表", [now, name, type, description, imageUrls]);
+
+    // Send email notification (non-blocking, don't fail the request)
+    sendNotificationEmail(name, type, description, imageUrls).catch((err) =>
+      console.error("Failed to send notification email:", err)
+    );
 
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {

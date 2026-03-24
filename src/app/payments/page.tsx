@@ -7,6 +7,8 @@ interface ReceiverGroup {
   receiver: string;
   bankName: string;
   bankAccount: string;
+  qrCodeUrl: string;
+  transferLink: string;
   payments: Payment[];
   totalAmount: number;
 }
@@ -50,13 +52,27 @@ export default function PaymentsPage() {
       if (!grouped[p.receiver]) grouped[p.receiver] = [];
       grouped[p.receiver].push(p);
     }
-    return Object.entries(grouped).map(([receiver, items]) => ({
-      receiver,
-      bankName: items[0]?.bankName || "",
-      bankAccount: items[0]?.bankAccount || "",
-      payments: items,
-      totalAmount: items.reduce((sum, p) => sum + p.amount, 0),
-    }));
+    return Object.entries(grouped).map(([receiver, items]) => {
+      // Sort by payer name so same person's items are adjacent
+      items.sort((a, b) => a.payer.localeCompare(b.payer, "zh-TW"));
+
+      // Use the latest session's info (bank, QR code, transfer link)
+      // so that old unpaid debts also show the organizer's newest QR code
+      const byDateDesc = [...items].sort((a, b) =>
+        (b.sessionDate || "").localeCompare(a.sessionDate || "")
+      );
+      const latest = byDateDesc[0];
+
+      return {
+        receiver,
+        bankName: latest?.bankName || "",
+        bankAccount: latest?.bankAccount || "",
+        qrCodeUrl: latest?.qrCodeUrl || "",
+        transferLink: latest?.transferLink || "",
+        payments: items,
+        totalAmount: items.reduce((sum, p) => sum + p.amount, 0),
+      };
+    });
   }, [payments]);
 
   const handleAction = async (
@@ -148,22 +164,19 @@ export default function PaymentsPage() {
                   待收款合計：$
                   {group.totalAmount.toLocaleString("zh-TW")}
                 </p>
-                {(group.payments[0]?.qrCodeUrl ||
-                  group.payments[0]?.transferLink) && (
+                {(group.qrCodeUrl || group.transferLink) && (
                   <div className="flex gap-2 mt-2">
-                    {group.payments[0]?.qrCodeUrl && (
+                    {group.qrCodeUrl && (
                       <button
-                        onClick={() =>
-                          setShowQrCode(group.payments[0].qrCodeUrl)
-                        }
+                        onClick={() => setShowQrCode(group.qrCodeUrl)}
                         className="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700"
                       >
                         查看 QR Code
                       </button>
                     )}
-                    {group.payments[0]?.transferLink && (
+                    {group.transferLink && (
                       <a
-                        href={group.payments[0].transferLink}
+                        href={group.transferLink}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700"
