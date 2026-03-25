@@ -325,7 +325,7 @@ export default function HomePage() {
                   <p className="text-xs text-stone-400">
                     貼上接龍或其他系統的訂單文字，建立場次時會一起匯入。
                     <br />
-                    支援「你訂」、餐盒平台等格式。
+                    支援「你訂」、餐盒平台等格式。若格式無法解析，也可以用下方「手動新增」逐筆輸入。
                   </p>
                   <textarea
                     value={transcriptText}
