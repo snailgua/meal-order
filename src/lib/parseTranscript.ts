@@ -82,12 +82,80 @@ function parseExternalPlatform(text: string): ParsedOrder[] {
   return orders;
 }
 
+function parseMealBoxPlatform(text: string): ParsedOrder[] {
+  const orders: ParsedOrder[] = [];
+
+  // Split into person blocks by blank lines
+  const blocks = text
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+
+  for (const block of blocks) {
+    const lines = block
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l);
+    if (lines.length < 4) continue;
+
+    const name = lines[0];
+    // lines[1] = "N 份餐點", lines[2] = "$total" — skip both
+
+    let i = 3;
+    while (i < lines.length) {
+      // Expect quantity line (single digit)
+      if (/^\d+$/.test(lines[i])) {
+        i++;
+      }
+      if (i >= lines.length) break;
+
+      // Item name
+      const itemName = lines[i];
+      i++;
+
+      // Collect notes until price line ($XXX)
+      const notes: string[] = [];
+      while (i < lines.length && !/^\$\d+/.test(lines[i])) {
+        const line = lines[i];
+        if (line === "餐點備註") {
+          i++;
+          continue;
+        }
+        // Strip surrounding quotes
+        notes.push(line.replace(/^["「]|["」]$/g, ""));
+        i++;
+      }
+
+      // Price line
+      let price = 0;
+      if (i < lines.length && /^\$\d+/.test(lines[i])) {
+        price = parseInt(lines[i].replace("$", ""));
+        i++;
+      }
+
+      if (price > 0) {
+        orders.push({ name, item: itemName, price, note: notes.join("; ") });
+      }
+    }
+  }
+
+  return orders;
+}
+
 export function parseTranscriptText(text: string): ParseResult {
   // 自動偵測外部訂餐平台格式（含「＋收款」或「$XXX / N 份」）
   if (text.includes("＋收款") || /\$\d+\s*\/\s*\d+\s*份/.test(text)) {
     const platformOrders = parseExternalPlatform(text);
     if (platformOrders.length > 0) {
       return { orders: platformOrders, failedLines: [] };
+    }
+  }
+
+  // 偵測餐盒平台格式（含「份餐點」+ 以 $XXX 標示價格）
+  if (/\d+\s*份餐點/.test(text) && /^\$\d+/m.test(text)) {
+    const mealBoxOrders = parseMealBoxPlatform(text);
+    if (mealBoxOrders.length > 0) {
+      return { orders: mealBoxOrders, failedLines: [] };
     }
   }
 

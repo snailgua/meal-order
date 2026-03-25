@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     const today = new Date().toLocaleDateString("en-CA", {
       timeZone: "Asia/Taipei",
     });
-    const now = new Date().toISOString();
+    const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
 
     await appendRow("訂餐場次表", [
       id,

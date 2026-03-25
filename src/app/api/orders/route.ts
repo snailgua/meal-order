@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const now = new Date().toISOString();
+    const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
     await appendRow("訂單明細表", [
       sessionId,
       session[1], // 日期
@@ -106,7 +106,7 @@ export async function PUT(request: Request) {
     const sessionRows = await getRows("訂餐場次表");
     const session = sessionRows.slice(1).find((r) => r[0] === sessionId);
 
-    const now = new Date().toISOString();
+    const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
     await updateRow("訂單明細表", rowIndex, [
       sessionId,
       session?.[1] || "", // 日期

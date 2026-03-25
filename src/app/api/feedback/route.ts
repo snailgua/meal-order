@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 
     const imageUrls = (body.imageUrls || "").trim();
 
-    const now = new Date().toISOString();
+    const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
     await appendRow("問題回報表", [now, name, type, description, imageUrls]);
 
     // Send email notification (await so it completes before serverless function exits)

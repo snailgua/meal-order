@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const now = new Date().toISOString();
+    const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
     let created = 0;
 
     for (const order of orders) {
