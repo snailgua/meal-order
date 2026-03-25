@@ -73,6 +73,53 @@ export async function PATCH(
       if (body.transferLink !== undefined) row[7] = body.transferLink;
       if (body.menuImages !== undefined) row[10] = body.menuImages;
       await updateRow("訂餐場次表", dataIndex + 1, row);
+
+      // Sync title/organizer to 訂單明細表 and 付款追蹤表
+      if (body.title || body.organizer) {
+        const [orderRows, paymentRows] = await Promise.all([
+          getRows("訂單明細表"),
+          getRows("付款追蹤表"),
+        ]);
+
+        const orderUpdates: Promise<void>[] = [];
+        for (let i = 1; i < orderRows.length; i++) {
+          if (orderRows[i][0] === id) {
+            let changed = false;
+            if (body.title && orderRows[i][2] !== body.title) {
+              orderRows[i][2] = body.title;
+              changed = true;
+            }
+            if (body.organizer && orderRows[i][3] !== body.organizer) {
+              orderRows[i][3] = body.organizer;
+              changed = true;
+            }
+            if (changed) {
+              orderUpdates.push(updateRow("訂單明細表", i + 1, orderRows[i]));
+            }
+          }
+        }
+
+        const paymentUpdates: Promise<void>[] = [];
+        for (let i = 1; i < paymentRows.length; i++) {
+          if (paymentRows[i][0] === id) {
+            let changed = false;
+            if (body.title && paymentRows[i][2] !== body.title) {
+              paymentRows[i][2] = body.title;
+              changed = true;
+            }
+            if (body.organizer && paymentRows[i][4] !== body.organizer) {
+              paymentRows[i][4] = body.organizer;
+              changed = true;
+            }
+            if (changed) {
+              paymentUpdates.push(updateRow("付款追蹤表", i + 1, paymentRows[i]));
+            }
+          }
+        }
+
+        await Promise.all([...orderUpdates, ...paymentUpdates]);
+      }
+
       return NextResponse.json({ success: true });
     }
 
