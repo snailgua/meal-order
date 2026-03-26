@@ -205,7 +205,7 @@
 
 ---
 
-## 七、實作狀態與技術備忘（2026-03-24 更新）
+## 七、實作狀態與技術備忘（2026-03-25 更新）
 
 ### 功能完成度
 
@@ -214,13 +214,19 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
 - **預先輸入訂單**：建立場次時，團主可預先輸入訂單，支援兩種方式：
   - **轉錄匯入**：貼上接龍文字一併匯入，場次頁也可事後匯入。解析邏輯抽取至 `src/lib/parseTranscript.ts` 共用。支援每行「姓名 品項 價格」格式，自動處理全形空格、$符號、行首編號、各種分隔符號。另支援**外部訂餐平台格式**（含「＋收款」分隔的區塊格式，如「你訂」平台）及**餐盒平台格式**（含「N 份餐點 / $XXX」的區塊格式，每人可多份品項，自動拆分並帶入備註）。解析結果可逐筆編輯、刪除後再匯入。
   - **手動新增**：按「手動新增一筆訂單」逐筆輸入姓名、品項、價格、備註，適用於尚未支援的轉錄格式。兩種方式可混合使用，共用同一份訂單列表。
-- **場次資訊可編輯**：標題、負責人姓名、銀行名稱、銀行帳號、收款 QR Code（上傳/更換/移除）、轉帳連結、菜單圖片（多張上傳/移除）皆可在場次頁面直接編輯。圖片上傳使用樣式化按鈕（虛線框），非原生 file input。
-- **付款流程簡化**：「我已轉帳」和「確認收到」按鈕同時顯示；團主按「確認收到」即直接核銷，不需付款人先標記。付款頁可一鍵複製收款人銀行帳號。
+- **場次資訊可編輯**：標題、負責人姓名、銀行名稱、銀行帳號、收款 QR Code（上傳/更換/移除）、轉帳連結、菜單圖片（多張上傳/移除）皆可在場次頁面直接編輯。圖片上傳使用樣式化按鈕（虛線框），非原生 file input。**編輯標題或負責人時會同步更新訂單明細表和付款追蹤表**。
+- **付款追蹤頁面改進**：
+  - 以收款人分組，同一收款人底下的欠款按**付款人姓名排序**，同一人的多筆品項合併顯示（名字只出現一次，附合計金額）。
+  - 合計金額以大字深綠粗體顯示，個別品項價格以小字灰色顯示，視覺上區分。
+  - QR Code 和銀行資訊使用該收款人**最新場次**的資料，確保團主更新 QR Code 後舊帳款也能看到新的。
+  - 「我已轉帳」和「確認收到」按鈕同時顯示；團主按「確認收到」即直接核銷，不需付款人先標記。付款頁可一鍵複製收款人銀行帳號。
+- **Email 通知**：問題回報送出後自動寄 email 通知管理者（透過 nodemailer + Gmail SMTP）。環境變數：`SMTP_EMAIL`, `SMTP_PASSWORD`, `NOTIFICATION_EMAIL`。
+- **時區修正**：所有 API 時間戳使用 `Asia/Taipei` 時區（`toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })`），非 UTC。
 - **圖片全螢幕檢視**：QR Code 和菜單圖片點擊後以全螢幕 modal 放大檢視。
 - **自動輪詢**：場次頁與付款頁每 10 秒自動刷新資料，畫面顯示最後更新時間與錯誤狀態。
 - **自動清理**：進入付款追蹤頁時自動呼叫 cleanup API，清除 3 個月前已核銷的紀錄。
 - **使用教學頁面**（`/guide`）：流程圖風格說明訂餐與付款流程，含信任制提醒、Google Sheet 連結。
-- **問題回報頁面**（`/feedback`）：表單寫入 Google Sheets「問題回報表」，問題類型下拉選單（Bug 回報/功能建議/其他），支援多張截圖上傳（GCS）。
+- **問題回報頁面**（`/feedback`）：表單寫入 Google Sheets「問題回報表」，問題類型下拉選單（Bug 回報/功能建議/其他），支援多張截圖上傳（GCS）。送出後寄 email 通知。
 - **底部導覽列 4 tab**：怎麼用？→ 今日訂餐（預設）→ 付款追蹤 → 回報問題
 - **localStorage 記憶姓名**：使用者名字存在 `localStorage("userName")`，訂餐表單與問題回報表單自動帶入。
 
@@ -270,7 +276,7 @@ src/
 │       ├── orders/route.ts        # GET, POST, PUT, DELETE
 │       ├── orders/batch/route.ts  # POST(批次新增訂單，轉錄匯入用)
 │       ├── payments/route.ts      # GET(未核銷), PATCH(確認付款/收款，收款人確認即核銷)
-│       ├── feedback/route.ts      # POST(問題回報寫入 Google Sheets，含截圖連結)
+│       ├── feedback/route.ts      # POST(問題回報寫入 Google Sheets，含截圖連結 + email 通知)
 │       ├── upload/route.ts        # POST(上傳圖片到 GCS)
 │       └── cleanup/route.ts      # POST(清除 3 個月前已核銷紀錄)
 ├── components/
@@ -286,5 +292,5 @@ src/
 3. **文字自動 trim**：所有使用者輸入的文字欄位（姓名、品項、備註、標題等）在寫入 Sheets 前會自動 `.trim()`
 4. **信任制操作警告**：「我已轉帳」會提示付款人姓名確認、「確認收到」和「重新開放訂餐」和「關閉訂餐」按鈕會跳 confirm 警告，提醒只有團主/收款人才該點
 5. **Hydration 問題**：若改了 layout 或首頁文字後出現 hydration mismatch，需 `rm -rf .next` 再重啟 dev server
-6. **環境變數**：`.env.local` 包含 `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`, `GCS_BUCKET_NAME`
+6. **環境變數**：`.env.local` 包含 `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`, `GCS_BUCKET_NAME`, `SMTP_EMAIL`, `SMTP_PASSWORD`, `NOTIFICATION_EMAIL`
 7. **localStorage**：使用者名字會存在 `localStorage("userName")` 中，下次自動帶入
