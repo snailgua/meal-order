@@ -325,7 +325,9 @@ export default function HomePage() {
               {showTranscript && (
                 <div className="p-4 space-y-3">
                   <p className="text-xs text-stone-400">
-                    貼上文字或上傳截圖，支援各種格式，AI 自動辨識。
+                    把接龍文字貼進下方框框，或直接上傳 LINE 對話截圖 / 菜單照片。
+                    <br />
+                    不管什麼格式都可以，系統會自動辨識姓名、品項和價格。
                   </p>
                   <textarea
                     value={transcriptText}
