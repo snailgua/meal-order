@@ -340,7 +340,7 @@ export default function HomePage() {
                   <div>
                     <label className="flex items-center justify-center gap-2 cursor-pointer border-2 border-dashed border-stone-300 rounded-xl py-3 text-sm text-stone-500 font-medium active:bg-stone-50 hover:border-emerald-300 hover:text-emerald-600 transition">
                       <span>&#x1F4F7;</span>
-                      <span>{transcriptImage ? transcriptImage.name : "上傳訂單截圖（LINE 對話、菜單照片等）"}</span>
+                      <span>{transcriptImage ? transcriptImage.name : "上傳訂單截圖來匯入（LINE 對話、菜單照片等）"}</span>
                       <input
                         type="file"
                         accept="image/*"
