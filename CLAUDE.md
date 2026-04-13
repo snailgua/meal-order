@@ -1,3 +1,24 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## 開發指令
+
+```bash
+npm run dev        # 啟動 dev server（Turbopack）
+npm run build      # 生產建置
+npm run lint       # ESLint（next core-web-vitals + typescript）
+npm start          # 啟動生產 server
+```
+
+沒有測試框架 — 無 test 指令。變更後用 `npm run build` 驗證型別與建置正確性。
+
+## 路徑別名
+
+`@/*` → `./src/*`（tsconfig paths），所有 import 使用 `@/lib/...`、`@/components/...` 等。
+
+---
+
 # 部門訂餐與對帳 Web App — 完整開發 Prompt
 
 ## 一、專案概述
@@ -293,7 +314,7 @@ src/
 2. **圖片需公開讀取**：GCS bucket 必須授予 `allUsers` 為 Storage Object Viewer，否則圖片 URL 會 403
 3. **文字自動 trim**：所有使用者輸入的文字欄位（姓名、品項、備註、標題等）在寫入 Sheets 前會自動 `.trim()`
 4. **信任制操作警告**：「我已轉帳」會提示付款人姓名確認、「確認收到」和「重新開放訂餐」和「關閉訂餐」按鈕會跳 confirm 警告，提醒只有團主/收款人才該點
-5. **Hydration 問題**：若改了 layout 或首頁文字後出現 hydration mismatch，需 `rm -rf .next` 再重啟 dev server
+5. **Hydration 問題**：若改了 layout 或首頁文字後出現 hydration mismatch，需 `mv .next ~/.Trash/` 再重啟 dev server
 6. **環境變數**：`.env.local` 包含 `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`, `GCS_BUCKET_NAME`, `SMTP_EMAIL`, `SMTP_PASSWORD`, `NOTIFICATION_EMAIL`, `GEMINI_API_KEY`
 7. **localStorage**：使用者名字會存在 `localStorage("userName")` 中，下次自動帶入
 
