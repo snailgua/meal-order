@@ -205,15 +205,15 @@
 
 ---
 
-## 七、實作狀態與技術備忘（2026-03-25 更新）
+## 七、實作狀態與技術備忘（2026-04-13 更新）
 
 ### 功能完成度
 
 P0–P3 所有功能皆已完成。另外新增以下功能：
 
 - **預先輸入訂單**：建立場次時，團主可預先輸入訂單，支援兩種方式：
-  - **轉錄匯入**：貼上接龍文字一併匯入，場次頁也可事後匯入。解析邏輯抽取至 `src/lib/parseTranscript.ts` 共用。支援每行「姓名 品項 價格」格式，自動處理全形空格、$符號、行首編號、各種分隔符號。另支援**外部訂餐平台格式**（含「＋收款」分隔的區塊格式，如「你訂」平台）及**餐盒平台格式**（含「N 份餐點 / $XXX」的區塊格式，每人可多份品項，自動拆分並帶入備註）。解析結果可逐筆編輯、刪除後再匯入。
-  - **手動新增**：按「手動新增一筆訂單」逐筆輸入姓名、品項、價格、備註，適用於尚未支援的轉錄格式。兩種方式可混合使用，共用同一份訂單列表。
+  - **轉錄匯入（含 AI 智慧解析）**：貼上接龍文字一併匯入，場次頁也可事後匯入。按「解析文字」後先用 regex parser（`src/lib/parseTranscript.ts`）嘗試，支援每行「姓名 品項 價格」、「你訂」平台、餐盒平台等已知格式。**若 regex 無法解析，自動 fallback 到 Gemini AI 解析**（`/api/parse-ai`），可處理任意格式的自然語言訂單文字（如「小明跟小華都要排骨飯 85 塊」）。使用者操作不變，按鈕會顯示「AI 解析中...」提示。解析結果可逐筆編輯、刪除後再匯入。
+  - **手動新增**：按「手動新增一筆訂單」逐筆輸入姓名、品項、價格、備註。兩種方式可混合使用，共用同一份訂單列表。
 - **場次資訊可編輯**：標題、負責人姓名、銀行名稱、銀行帳號、收款 QR Code（上傳/更換/移除）、轉帳連結、菜單圖片（多張上傳/移除）皆可在場次頁面直接編輯。圖片上傳使用樣式化按鈕（虛線框），非原生 file input。**編輯標題或負責人時會同步更新訂單明細表和付款追蹤表**。
 - **付款追蹤頁面改進**：
   - 以收款人分組，同一收款人底下的欠款按**付款人姓名排序**，同一人的多筆品項合併顯示（名字只出現一次，附合計金額）。
@@ -239,6 +239,7 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
 | 樣式 | Tailwind CSS v4 |
 | 資料庫 | Google Sheets API (`googleapis` package) |
 | 圖片儲存 | **Google Cloud Storage**（非 Google Drive，Drive 對 Service Account 有 storage quota 限制） |
+| AI 解析 | **Google Gemini 2.5 Flash**（`@google/generative-ai` SDK），用於轉錄匯入的 fallback 解析 |
 | 部署 | Vercel（已部署） |
 | UI 風格 | emerald/stone 配色，Apple Podcasts 風格，rounded-2xl 卡片 |
 
@@ -277,6 +278,7 @@ src/
 │       ├── orders/batch/route.ts  # POST(批次新增訂單，轉錄匯入用)
 │       ├── payments/route.ts      # GET(未核銷), PATCH(確認付款/收款，收款人確認即核銷)
 │       ├── feedback/route.ts      # POST(問題回報寫入 Google Sheets，含截圖連結 + email 通知)
+│       ├── parse-ai/route.ts      # POST(Gemini AI 解析任意格式訂單文字)
 │       ├── upload/route.ts        # POST(上傳圖片到 GCS)
 │       └── cleanup/route.ts      # POST(清除 3 個月前已核銷紀錄)
 ├── components/
@@ -292,5 +294,15 @@ src/
 3. **文字自動 trim**：所有使用者輸入的文字欄位（姓名、品項、備註、標題等）在寫入 Sheets 前會自動 `.trim()`
 4. **信任制操作警告**：「我已轉帳」會提示付款人姓名確認、「確認收到」和「重新開放訂餐」和「關閉訂餐」按鈕會跳 confirm 警告，提醒只有團主/收款人才該點
 5. **Hydration 問題**：若改了 layout 或首頁文字後出現 hydration mismatch，需 `rm -rf .next` 再重啟 dev server
-6. **環境變數**：`.env.local` 包含 `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`, `GCS_BUCKET_NAME`, `SMTP_EMAIL`, `SMTP_PASSWORD`, `NOTIFICATION_EMAIL`
+6. **環境變數**：`.env.local` 包含 `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`, `GCS_BUCKET_NAME`, `SMTP_EMAIL`, `SMTP_PASSWORD`, `NOTIFICATION_EMAIL`, `GEMINI_API_KEY`
 7. **localStorage**：使用者名字會存在 `localStorage("userName")` 中，下次自動帶入
+
+---
+
+## CLAUDE.md 維護原則
+
+本檔遵循 umbrella `/Users/ac/projects/CLAUDE.md`「CLAUDE.md 維護原則（所有層級）」一節定義的 5 條原則（指令正確性最優先 / 避免過度約束 / 新增前先確認重複 / 完成大任務後審查 / 階層分工不要越界）。新增或修改本檔內容前先對照那節。
+
+**meal-order 專屬注意**：
+- 「Google Sheets 欄位對照」section 是**硬編碼依賴的事實來源** —— 改了就要同步改 API route 中的 `row[N]` 索引。指令正確性原則在這裡是 critical
+- 「實作狀態與技術備忘」會隨功能演進而老化，加新功能時順便檢查舊段落是否還準確

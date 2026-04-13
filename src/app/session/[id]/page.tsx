@@ -82,6 +82,7 @@ export default function SessionPage({
   const [failedLines, setFailedLines] = useState<string[]>([]);
   const [transcriptSubmitting, setTranscriptSubmitting] = useState(false);
   const [editingParsedIndex, setEditingParsedIndex] = useState<number | null>(null);
+  const [aiParsing, setAiParsing] = useState(false);
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
@@ -325,10 +326,41 @@ export default function SessionPage({
     });
   };
 
-  const parseTranscript = () => {
+  const parseTranscript = async () => {
     const result = parseTranscriptText(transcriptText);
-    setParsedOrders(result.orders);
-    setFailedLines(result.failedLines);
+    const regexOrders = result.orders;
+    const failed = result.failedLines;
+
+    if (failed.length === 0 && regexOrders.length > 0) {
+      setParsedOrders(regexOrders);
+      setFailedLines([]);
+      return;
+    }
+
+    // 有失敗的行或完全沒結果 → AI fallback
+    const textForAI =
+      regexOrders.length === 0 ? transcriptText : failed.join("\n");
+    setAiParsing(true);
+    setFailedLines([]);
+    try {
+      const res = await fetch("/api/parse-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: textForAI }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setParsedOrders([...regexOrders, ...data.orders]);
+      } else {
+        setParsedOrders(regexOrders);
+        setFailedLines(failed.length > 0 ? failed : [transcriptText]);
+      }
+    } catch {
+      setParsedOrders(regexOrders);
+      setFailedLines(failed.length > 0 ? failed : [transcriptText]);
+    } finally {
+      setAiParsing(false);
+    }
   };
 
   const handleTranscriptImport = async () => {
@@ -865,7 +897,7 @@ export default function SessionPage({
           {showTranscript && (
             <div className="px-5 pb-5 space-y-4">
               <p className="text-xs text-stone-400">
-                貼上接龍或其他系統的訂單文字，每行格式：姓名 品項 價格。也支援「你訂」等平台的付款頁面內容直接複製貼上。
+                貼上接龍或其他系統的訂單文字，支援各種格式，看不懂的會自動用 AI 辨識。
               </p>
               <textarea
                 value={transcriptText}
@@ -876,10 +908,10 @@ export default function SessionPage({
               />
               <button
                 onClick={parseTranscript}
-                disabled={!transcriptText.trim()}
+                disabled={!transcriptText.trim() || aiParsing}
                 className="w-full bg-stone-100 text-stone-600 py-2.5 rounded-xl text-sm font-medium active:bg-stone-200 disabled:opacity-40"
               >
-                解析文字
+                {aiParsing ? "AI 解析中..." : "解析文字"}
               </button>
 
               {parsedOrders.length > 0 && (
@@ -1004,7 +1036,7 @@ export default function SessionPage({
                     </p>
                   ))}
                   <p className="text-xs text-amber-400 mt-1">
-                    請確認格式為「姓名 品項 價格」，或手動新增這幾筆
+                    AI 也無法辨識這幾行，請手動新增這幾筆
                   </p>
                 </div>
               )}

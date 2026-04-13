@@ -103,7 +103,8 @@ export default function GuidePage() {
         <div className="bg-stone-50 rounded-xl p-3 mt-3 space-y-1.5">
           <p className="text-xs font-medium text-stone-500">轉錄匯入支援的格式：</p>
           <p className="text-xs text-stone-400">&#x2022; 接龍格式：每行「姓名 品項 價格」</p>
-          <p className="text-xs text-stone-400">&#x2022; 外部平台：支援「你訂」及餐盒平台（含「N 份餐點 / $XXX」格式），需要其他平台可以到回報問題跟我說～</p>
+          <p className="text-xs text-stone-400">&#x2022; 外部平台：支援「你訂」及餐盒平台等已知格式</p>
+          <p className="text-xs text-stone-400">&#x2022; <strong className="text-stone-500">AI 智慧辨識</strong>：遇到不認識的格式會自動用 AI 解析，不用擔心格式問題！</p>
           <p className="text-xs text-stone-400">&#x2022; 多餘空格、$符號、編號等系統都會自動處理，解析後可逐筆修改</p>
         </div>
         <p className="text-xs text-stone-400 mt-3 text-center">

@@ -31,6 +31,7 @@ export default function HomePage() {
   const [failedLines, setFailedLines] = useState<string[]>([]);
   const [showTranscript, setShowTranscript] = useState(false);
   const [editingParsedIndex, setEditingParsedIndex] = useState<number | null>(null);
+  const [aiParsing, setAiParsing] = useState(false);
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -325,7 +326,7 @@ export default function HomePage() {
                   <p className="text-xs text-stone-400">
                     貼上接龍或其他系統的訂單文字，建立場次時會一起匯入。
                     <br />
-                    支援「你訂」、餐盒平台等格式。若格式無法解析，也可以用下方「手動新增」逐筆輸入。
+                    支援各種格式，看不懂的會自動用 AI 辨識。
                   </p>
                   <textarea
                     value={transcriptText}
@@ -336,15 +337,54 @@ export default function HomePage() {
                   />
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       const result = parseTranscriptText(transcriptText);
-                      setParsedOrders((prev) => [...prev, ...result.orders]);
-                      setFailedLines(result.failedLines);
+                      const regexOrders = result.orders;
+                      const failed = result.failedLines;
+
+                      if (failed.length === 0 && regexOrders.length > 0) {
+                        // regex 全部成功
+                        setParsedOrders((prev) => [...prev, ...regexOrders]);
+                        setFailedLines([]);
+                        return;
+                      }
+
+                      // 有失敗的行或完全沒結果 → AI fallback
+                      const textForAI =
+                        regexOrders.length === 0
+                          ? transcriptText
+                          : failed.join("\n");
+                      setAiParsing(true);
+                      setFailedLines([]);
+                      try {
+                        const res = await fetch("/api/parse-ai", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ text: textForAI }),
+                        });
+                        if (res.ok) {
+                          const data = await res.json();
+                          setParsedOrders((prev) => [
+                            ...prev,
+                            ...regexOrders,
+                            ...data.orders,
+                          ]);
+                        } else {
+                          // AI 也失敗，顯示原本的 failedLines
+                          setParsedOrders((prev) => [...prev, ...regexOrders]);
+                          setFailedLines(failed.length > 0 ? failed : [transcriptText]);
+                        }
+                      } catch {
+                        setParsedOrders((prev) => [...prev, ...regexOrders]);
+                        setFailedLines(failed.length > 0 ? failed : [transcriptText]);
+                      } finally {
+                        setAiParsing(false);
+                      }
                     }}
-                    disabled={!transcriptText.trim()}
+                    disabled={!transcriptText.trim() || aiParsing}
                     className="w-full bg-stone-100 text-stone-600 py-2 rounded-xl text-sm font-medium active:bg-stone-200 disabled:opacity-40"
                   >
-                    解析文字
+                    {aiParsing ? "AI 解析中..." : "解析文字"}
                   </button>
 
                   {failedLines.length > 0 && (
@@ -358,7 +398,7 @@ export default function HomePage() {
                         </p>
                       ))}
                       <p className="text-xs text-amber-400 mt-1">
-                        請確認格式為「姓名 品項 價格」，或用下方手動新增
+                        AI 也無法辨識這幾行，請用下方手動新增
                       </p>
                     </div>
                   )}
