@@ -1,26 +1,9 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
-export async function POST(request: Request) {
-  try {
-    const { text } = await request.json();
-
-    if (!text || typeof text !== "string" || !text.trim()) {
-      return NextResponse.json({ error: "請提供文字內容" }, { status: 400 });
-    }
-
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json(
-        { error: "AI 解析功能未設定" },
-        { status: 500 }
-      );
-    }
-
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-    const prompt = `你是一個訂餐文字解析器。請把以下訂餐文字解析成 JSON 陣列。
+const SYSTEM_PROMPT = `你是一個訂餐文字解析器。請把訂餐內容解析成 JSON 陣列。
 
 每筆訂單必須包含：
 - name: 訂餐人姓名（字串）
@@ -32,12 +15,47 @@ export async function POST(request: Request) {
 - 一個人如果訂了多個品項，拆成多筆
 - 價格一定是正整數
 - 如果某行完全無法判斷姓名、品項、價格，就跳過
-- 只回傳 JSON 陣列，不要任何其他文字或 markdown 標記
+- 只回傳 JSON 陣列，不要任何其他文字或 markdown 標記`;
 
-訂餐文字：
-${text}`;
+export async function POST(request: Request) {
+  try {
+    const { text, image, mimeType } = await request.json();
 
-    const result = await model.generateContent(prompt);
+    if (!text && !image) {
+      return NextResponse.json(
+        { error: "請提供文字或圖片" },
+        { status: 400 }
+      );
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: "AI 解析功能未設定" },
+        { status: 500 }
+      );
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    const parts: Part[] = [{ text: SYSTEM_PROMPT }];
+
+    if (image) {
+      parts.push({
+        inlineData: {
+          mimeType: mimeType || "image/png",
+          data: image,
+        },
+      });
+      parts.push({
+        text: "請從這張圖片中辨識所有訂餐內容，解析成 JSON 陣列。",
+      });
+    }
+
+    if (text) {
+      parts.push({ text: `訂餐文字：\n${text}` });
+    }
+
+    const result = await model.generateContent(parts);
     const response = result.response.text();
 
     // 從回應中提取 JSON（處理可能的 markdown 包裹）

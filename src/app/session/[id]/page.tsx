@@ -83,6 +83,7 @@ export default function SessionPage({
   const [transcriptSubmitting, setTranscriptSubmitting] = useState(false);
   const [editingParsedIndex, setEditingParsedIndex] = useState<number | null>(null);
   const [aiParsing, setAiParsing] = useState(false);
+  const [transcriptImage, setTranscriptImage] = useState<File | null>(null);
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
@@ -327,6 +328,42 @@ export default function SessionPage({
   };
 
   const parseTranscript = async () => {
+    // 有圖片 → 直接走 AI
+    if (transcriptImage) {
+      setAiParsing(true);
+      setFailedLines([]);
+      try {
+        const buffer = await transcriptImage.arrayBuffer();
+        const base64 = btoa(
+          new Uint8Array(buffer).reduce(
+            (data, byte) => data + String.fromCharCode(byte),
+            ""
+          )
+        );
+        const res = await fetch("/api/parse-ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image: base64,
+            mimeType: transcriptImage.type,
+            text: transcriptText.trim() || undefined,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setParsedOrders(data.orders);
+        } else {
+          setFailedLines(["截圖辨識失敗，請改用文字貼上或手動新增"]);
+        }
+      } catch {
+        setFailedLines(["截圖辨識失敗，請改用文字貼上或手動新增"]);
+      } finally {
+        setAiParsing(false);
+      }
+      return;
+    }
+
+    // 純文字 → regex 先試，失敗再 AI
     const result = parseTranscriptText(transcriptText);
     const regexOrders = result.orders;
     const failed = result.failedLines;
@@ -337,7 +374,6 @@ export default function SessionPage({
       return;
     }
 
-    // 有失敗的行或完全沒結果 → AI fallback
     const textForAI =
       regexOrders.length === 0 ? transcriptText : failed.join("\n");
     setAiParsing(true);
@@ -897,7 +933,7 @@ export default function SessionPage({
           {showTranscript && (
             <div className="px-5 pb-5 space-y-4">
               <p className="text-xs text-stone-400">
-                貼上接龍或其他系統的訂單文字，支援各種格式，看不懂的會自動用 AI 辨識。
+                貼上文字或上傳截圖，支援各種格式，AI 自動辨識。
               </p>
               <textarea
                 value={transcriptText}
@@ -906,9 +942,38 @@ export default function SessionPage({
                 className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition min-h-[120px] resize-y"
                 rows={6}
               />
+              {/* 截圖上傳 */}
+              <div>
+                <label className="inline-flex items-center gap-1.5 cursor-pointer text-sm text-stone-500 active:text-stone-700">
+                  <span>&#x1F4F7;</span>
+                  <span>{transcriptImage ? transcriptImage.name : "上傳訂單截圖"}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => setTranscriptImage(e.target.files?.[0] || null)}
+                  />
+                </label>
+                {transcriptImage && (
+                  <div className="mt-2 relative inline-block">
+                    <img
+                      src={URL.createObjectURL(transcriptImage)}
+                      alt="截圖預覽"
+                      className="h-32 rounded-xl border border-stone-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTranscriptImage(null)}
+                      className="absolute -top-1.5 -right-1.5 bg-rose-400 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
+                    >
+                      x
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={parseTranscript}
-                disabled={!transcriptText.trim() || aiParsing}
+                disabled={(!transcriptText.trim() && !transcriptImage) || aiParsing}
                 className="w-full bg-stone-100 text-stone-600 py-2.5 rounded-xl text-sm font-medium active:bg-stone-200 disabled:opacity-40"
               >
                 {aiParsing ? "AI 解析中..." : "解析文字"}

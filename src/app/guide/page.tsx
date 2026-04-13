@@ -68,7 +68,7 @@ export default function GuidePage() {
             number={2}
             emoji="&#x1F4E5;"
             title="預先輸入訂單（選填）"
-            desc="團主可以先幫大家輸入訂單：用「轉錄匯入」貼上接龍文字，或按「手動新增」一筆一筆輸入"
+            desc="團主可以先幫大家輸入訂單：用「轉錄匯入」貼上文字或上傳截圖（AI 自動辨識），或按「手動新增」一筆一筆輸入"
           />
           <StepArrow />
           <Step
@@ -82,7 +82,7 @@ export default function GuidePage() {
             number={4}
             emoji="&#x270F;&#xFE0F;"
             title="大家填餐"
-            desc="輸入名字、品項、價格，按送出訂單（場次頁也可以再轉錄匯入）"
+            desc="輸入名字、品項、價格，按送出訂單（場次頁也可以再轉錄匯入或上傳截圖）"
           />
           <StepArrow />
           <Step
@@ -101,11 +101,11 @@ export default function GuidePage() {
           />
         </div>
         <div className="bg-stone-50 rounded-xl p-3 mt-3 space-y-1.5">
-          <p className="text-xs font-medium text-stone-500">轉錄匯入支援的格式：</p>
-          <p className="text-xs text-stone-400">&#x2022; 接龍格式：每行「姓名 品項 價格」</p>
-          <p className="text-xs text-stone-400">&#x2022; 外部平台：支援「你訂」及餐盒平台等已知格式</p>
-          <p className="text-xs text-stone-400">&#x2022; <strong className="text-stone-500">AI 智慧辨識</strong>：遇到不認識的格式會自動用 AI 解析，不用擔心格式問題！</p>
-          <p className="text-xs text-stone-400">&#x2022; 多餘空格、$符號、編號等系統都會自動處理，解析後可逐筆修改</p>
+          <p className="text-xs font-medium text-stone-500">轉錄匯入支援的方式：</p>
+          <p className="text-xs text-stone-400">&#x2022; <strong className="text-stone-500">貼上文字</strong>：接龍、「你訂」、餐盒平台等各種格式都可以</p>
+          <p className="text-xs text-stone-400">&#x2022; <strong className="text-stone-500">上傳截圖</strong>：直接拍 LINE 接龍或菜單截圖，AI 自動辨識</p>
+          <p className="text-xs text-stone-400">&#x2022; <strong className="text-stone-500">AI 智慧辨識</strong>：看不懂的格式會自動用 AI 解析，不用擔心格式問題！</p>
+          <p className="text-xs text-stone-400">&#x2022; 解析後可逐筆修改再匯入</p>
         </div>
         <p className="text-xs text-stone-400 mt-3 text-center">
           標題、負責人、收款帳戶、QR Code、菜單圖片都可以隨時點「編輯」修改～
