@@ -74,7 +74,7 @@ export default function SessionPage({
   });
 
   // 轉錄匯入
-  const [showTranscript, setShowTranscript] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(true);
   const [transcriptText, setTranscriptText] = useState("");
   const [parsedOrders, setParsedOrders] = useState<
     { name: string; item: string; price: number; note: string }[]

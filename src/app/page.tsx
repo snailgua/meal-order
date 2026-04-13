@@ -29,7 +29,7 @@ export default function HomePage() {
   const [transcriptText, setTranscriptText] = useState("");
   const [parsedOrders, setParsedOrders] = useState<ParsedOrder[]>([]);
   const [failedLines, setFailedLines] = useState<string[]>([]);
-  const [showTranscript, setShowTranscript] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(true);
   const [editingParsedIndex, setEditingParsedIndex] = useState<number | null>(null);
   const [aiParsing, setAiParsing] = useState(false);
   const [transcriptImage, setTranscriptImage] = useState<File | null>(null);
