@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { Payment } from "@/types";
 
 interface ReceiverGroup {
@@ -9,6 +9,7 @@ interface ReceiverGroup {
   bankAccount: string;
   qrCodeUrl: string;
   transferLink: string;
+  latestSessionId: string;
   payments: Payment[];
   totalAmount: number;
 }
@@ -20,6 +21,9 @@ export default function PaymentsPage() {
   const [showQrCode, setShowQrCode] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [fetchError, setFetchError] = useState(false);
+  const [uploadingQrFor, setUploadingQrFor] = useState<string | null>(null);
+  const qrInputRef = useRef<HTMLInputElement>(null);
+  const qrTargetRef = useRef<{ receiver: string; sessionId: string } | null>(null);
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -69,11 +73,18 @@ export default function PaymentsPage() {
         bankAccount: latest?.bankAccount || "",
         qrCodeUrl: latest?.qrCodeUrl || "",
         transferLink: latest?.transferLink || "",
+        latestSessionId: latest?.sessionId || "",
         payments: items,
         totalAmount: items.reduce((sum, p) => sum + p.amount, 0),
       };
     });
   }, [payments]);
+
+  const handleUpdateQr = (receiver: string, sessionId: string) => {
+    if (!sessionId) return;
+    qrTargetRef.current = { receiver, sessionId };
+    qrInputRef.current?.click();
+  };
 
   const handleAction = async (
     rowIndex: number,
@@ -164,28 +175,39 @@ export default function PaymentsPage() {
                   待收款合計：$
                   {group.totalAmount.toLocaleString("zh-TW")}
                 </p>
-                {(group.qrCodeUrl || group.transferLink) && (
-                  <div className="flex gap-2 mt-2">
-                    {group.qrCodeUrl && (
-                      <button
-                        onClick={() => setShowQrCode(group.qrCodeUrl)}
-                        className="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700"
-                      >
-                        查看 QR Code
-                      </button>
-                    )}
-                    {group.transferLink && (
-                      <a
-                        href={group.transferLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700"
-                      >
-                        點此轉帳
-                      </a>
-                    )}
-                  </div>
-                )}
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {group.qrCodeUrl && (
+                    <button
+                      onClick={() => setShowQrCode(group.qrCodeUrl)}
+                      className="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700"
+                    >
+                      查看 QR Code
+                    </button>
+                  )}
+                  {group.transferLink && (
+                    <a
+                      href={group.transferLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700"
+                    >
+                      點此轉帳
+                    </a>
+                  )}
+                  {group.latestSessionId && (
+                    <button
+                      onClick={() => handleUpdateQr(group.receiver, group.latestSessionId)}
+                      disabled={uploadingQrFor === group.receiver}
+                      className="bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-xl text-xs font-medium active:bg-emerald-200 disabled:opacity-50"
+                    >
+                      {uploadingQrFor === group.receiver
+                        ? "上傳中..."
+                        : group.qrCodeUrl
+                        ? "更新 QR Code"
+                        : "設定 QR Code"}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Payment items grouped by payer */}
@@ -270,6 +292,47 @@ export default function PaymentsPage() {
           ))}
         </div>
       )}
+
+      {/* Hidden file input for QR upload (shared across all receivers) */}
+      <input
+        ref={qrInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          const target = qrTargetRef.current;
+          if (!file || !target) {
+            e.target.value = "";
+            return;
+          }
+          setUploadingQrFor(target.receiver);
+          try {
+            const formData = new FormData();
+            formData.append("files", file);
+            const uploadRes = await fetch("/api/upload", {
+              method: "POST",
+              body: formData,
+            });
+            if (!uploadRes.ok) throw new Error("upload failed");
+            const { urls } = await uploadRes.json();
+            const patchRes = await fetch(`/api/sessions/${target.sessionId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ qrCodeUrl: urls[0] }),
+            });
+            if (!patchRes.ok) throw new Error("patch failed");
+            await fetchPayments();
+            alert("QR Code 已更新");
+          } catch {
+            alert("更新失敗，請稍後再試");
+          } finally {
+            setUploadingQrFor(null);
+            qrTargetRef.current = null;
+            e.target.value = "";
+          }
+        }}
+      />
 
       {/* QR Code Modal */}
       {showQrCode && (
