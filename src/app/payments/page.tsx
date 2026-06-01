@@ -10,6 +10,7 @@ interface ReceiverGroup {
   qrCodeUrl: string;
   transferLink: string;
   latestSessionId: string;
+  latestDate: string;
   payments: Payment[];
   totalAmount: number;
 }
@@ -56,28 +57,50 @@ export default function PaymentsPage() {
       if (!grouped[p.receiver]) grouped[p.receiver] = [];
       grouped[p.receiver].push(p);
     }
-    return Object.entries(grouped).map(([receiver, items]) => {
-      // Sort by payer name so same person's items are adjacent
-      items.sort((a, b) => a.payer.localeCompare(b.payer, "zh-TW"));
+    return Object.entries(grouped)
+      .map(([receiver, items]) => {
+        // Each payer's most recent debt date, so a payer's items stay
+        // grouped together but newer payers float to the top.
+        const payerLatestDate: Record<string, string> = {};
+        for (const p of items) {
+          const d = p.sessionDate || "";
+          if (d > (payerLatestDate[p.payer] || "")) payerLatestDate[p.payer] = d;
+        }
 
-      // Use the latest session's info (bank, QR code, transfer link)
-      // so that old unpaid debts also show the organizer's newest QR code
-      const byDateDesc = [...items].sort((a, b) =>
-        (b.sessionDate || "").localeCompare(a.sessionDate || "")
-      );
-      const latest = byDateDesc[0];
+        // Sort newest first (by date), keeping the same payer's items adjacent
+        items.sort((a, b) => {
+          // Different payer groups: newest debt first, name as tiebreaker
+          if (a.payer !== b.payer) {
+            const cmp = (payerLatestDate[b.payer] || "").localeCompare(
+              payerLatestDate[a.payer] || ""
+            );
+            if (cmp !== 0) return cmp;
+            return a.payer.localeCompare(b.payer, "zh-TW");
+          }
+          // Same payer: newest item first
+          return (b.sessionDate || "").localeCompare(a.sessionDate || "");
+        });
 
-      return {
-        receiver,
-        bankName: latest?.bankName || "",
-        bankAccount: latest?.bankAccount || "",
-        qrCodeUrl: latest?.qrCodeUrl || "",
-        transferLink: latest?.transferLink || "",
-        latestSessionId: latest?.sessionId || "",
-        payments: items,
-        totalAmount: items.reduce((sum, p) => sum + p.amount, 0),
-      };
-    });
+        // Use the latest session's info (bank, QR code, transfer link)
+        // so that old unpaid debts also show the organizer's newest QR code
+        const latest = [...items].sort((a, b) =>
+          (b.sessionDate || "").localeCompare(a.sessionDate || "")
+        )[0];
+
+        return {
+          receiver,
+          bankName: latest?.bankName || "",
+          bankAccount: latest?.bankAccount || "",
+          qrCodeUrl: latest?.qrCodeUrl || "",
+          transferLink: latest?.transferLink || "",
+          latestSessionId: latest?.sessionId || "",
+          latestDate: latest?.sessionDate || "",
+          payments: items,
+          totalAmount: items.reduce((sum, p) => sum + p.amount, 0),
+        };
+      })
+      // Receiver groups themselves: newest session on top, oldest at bottom
+      .sort((a, b) => b.latestDate.localeCompare(a.latestDate));
   }, [payments]);
 
   const handleUpdateQr = (receiver: string, sessionId: string) => {
