@@ -4,6 +4,7 @@ import { getRows, updateRow } from "@/lib/sheets";
 // 付款追蹤表 column layout:
 // [0]場次ID [1]日期 [2]標題 [3]付款人姓名 [4]收款人姓名 [5]金額
 // [6]品項名稱 [7]備註 [8]付款人是否標記已付 [9]收款人是否確認收到 [10]核銷時間
+// [11]付款人標記時間
 
 export async function GET() {
   try {
@@ -41,6 +42,7 @@ export async function GET() {
         const payerConfirmed = row[8] === "TRUE";
         const receiverConfirmed = row[9] === "TRUE";
         const settledAt = row[10] || null;
+        const payerConfirmedAt = row[11] || null;
 
         if (payerConfirmed && receiverConfirmed) return null;
 
@@ -58,6 +60,7 @@ export async function GET() {
           payerConfirmed,
           receiverConfirmed,
           settledAt,
+          payerConfirmedAt,
           sessionTitle: session?.title || "",
           sessionDate: session?.date || "",
           bankName: session?.bankName || "",
@@ -99,6 +102,7 @@ export async function PATCH(request: Request) {
         );
       }
       row[8] = "TRUE";
+      row[11] = new Date().toISOString();
       if (row[9] === "TRUE") {
         row[10] = new Date().toISOString();
       }
@@ -115,6 +119,11 @@ export async function PATCH(request: Request) {
       row[10] = new Date().toISOString();
     } else {
       return NextResponse.json({ error: "無效的操作" }, { status: 400 });
+    }
+
+    // 補滿欄位，避免稀疏陣列在寫回 Sheets 時產生空洞
+    for (let i = 0; i < 12; i++) {
+      if (row[i] === undefined || row[i] === null) row[i] = "";
     }
 
     await updateRow("付款追蹤表", rowIndex, row);

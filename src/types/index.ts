@@ -35,6 +35,7 @@ export interface Payment {
   payerConfirmed: boolean;
   receiverConfirmed: boolean;
   settledAt: string | null;
+  payerConfirmedAt: string | null;
   sessionTitle: string;
   sessionDate: string;
   bankName: string;

@@ -277,6 +277,13 @@ export default function PaymentsPage() {
                                       {p.sessionTitle}
                                       {p.sessionDate && ` (${p.sessionDate})`}
                                     </p>
+                                    {p.payerConfirmed &&
+                                      !p.receiverConfirmed &&
+                                      p.payerConfirmedAt && (
+                                        <p className="text-xs text-amber-600 mt-0.5">
+                                          已於 {formatPaidTime(p.payerConfirmedAt)} 標記轉帳
+                                        </p>
+                                      )}
                                   </div>
                                   <span className="text-stone-400 text-xs ml-2 shrink-0">
                                     ${p.amount.toLocaleString("zh-TW")}
@@ -379,6 +386,19 @@ export default function PaymentsPage() {
       )}
     </div>
   );
+}
+
+function formatPaidTime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString("zh-TW", {
+    timeZone: "Asia/Taipei",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function StatusBadge({ payment }: { payment: Payment }) {
