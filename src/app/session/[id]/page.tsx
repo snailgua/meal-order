@@ -84,7 +84,7 @@ export default function SessionPage({
   const [transcriptSubmitting, setTranscriptSubmitting] = useState(false);
   const [editingParsedIndex, setEditingParsedIndex] = useState<number | null>(null);
   const [aiParsing, setAiParsing] = useState(false);
-  const [transcriptImage, setTranscriptImage] = useState<File | null>(null);
+  const [transcriptImages, setTranscriptImages] = useState<File[]>([]);
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
@@ -353,23 +353,28 @@ export default function SessionPage({
 
   const parseTranscript = async () => {
     // 有圖片 → 直接走 AI
-    if (transcriptImage) {
+    if (transcriptImages.length > 0) {
       setAiParsing(true);
       setFailedLines([]);
       try {
-        const { base64, mimeType } = await imageFileToBase64(transcriptImage);
+        const images = await Promise.all(
+          transcriptImages.map(async (f) => {
+            const { base64, mimeType } = await imageFileToBase64(f);
+            return { data: base64, mimeType };
+          })
+        );
         const res = await fetch("/api/parse-ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            image: base64,
-            mimeType,
+            images,
             text: transcriptText.trim() || undefined,
           }),
         });
         if (res.ok) {
           const data = await res.json();
           setParsedOrders(data.orders);
+          setTranscriptImages([]); // 避免再按一次重複匯入
         } else {
           const data = await res.json().catch(() => null);
           setFailedLines([
@@ -971,34 +976,53 @@ export default function SessionPage({
               <div>
                 <label className="flex items-center justify-center gap-2 cursor-pointer border-2 border-dashed border-stone-300 rounded-xl py-3 text-sm text-stone-500 font-medium active:bg-stone-50 hover:border-emerald-300 hover:text-emerald-600 transition">
                   <span>&#x1F4F7;</span>
-                  <span>{transcriptImage ? transcriptImage.name : "上傳訂單截圖來匯入（LINE 對話、菜單照片等）"}</span>
+                  <span>
+                    {transcriptImages.length > 0
+                      ? `已選 ${transcriptImages.length} 張截圖，可再加選`
+                      : "上傳訂單截圖來匯入（可多張，LINE 對話、菜單照片等）"}
+                  </span>
                   <input
                     type="file"
                     accept="image/*"
+                    multiple
                     className="hidden"
-                    onChange={(e) => setTranscriptImage(e.target.files?.[0] || null)}
+                    onChange={(e) => {
+                      setTranscriptImages((prev) => [
+                        ...prev,
+                        ...Array.from(e.target.files || []),
+                      ]);
+                      e.target.value = "";
+                    }}
                   />
                 </label>
-                {transcriptImage && (
-                  <div className="mt-2 relative inline-block">
-                    <img
-                      src={URL.createObjectURL(transcriptImage)}
-                      alt="截圖預覽"
-                      className="h-32 rounded-xl border border-stone-200"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setTranscriptImage(null)}
-                      className="absolute -top-1.5 -right-1.5 bg-rose-400 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
-                    >
-                      x
-                    </button>
+                {transcriptImages.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {transcriptImages.map((img, i) => (
+                      <div key={i} className="relative inline-block">
+                        <img
+                          src={URL.createObjectURL(img)}
+                          alt={`截圖預覽 ${i + 1}`}
+                          className="h-24 rounded-xl border border-stone-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTranscriptImages((prev) =>
+                              prev.filter((_, j) => j !== i)
+                            )
+                          }
+                          className="absolute -top-1.5 -right-1.5 bg-rose-400 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
+                        >
+                          x
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
               <button
                 onClick={parseTranscript}
-                disabled={(!transcriptText.trim() && !transcriptImage) || aiParsing}
+                disabled={(!transcriptText.trim() && transcriptImages.length === 0) || aiParsing}
                 className="w-full bg-stone-100 text-stone-600 py-2.5 rounded-xl text-sm font-medium active:bg-stone-200 disabled:opacity-40"
               >
                 {aiParsing ? "AI 解析中..." : "解析文字"}

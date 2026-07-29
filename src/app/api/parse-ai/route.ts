@@ -22,9 +22,18 @@ const SYSTEM_PROMPT = `你是一個訂餐文字解析器。請把訂餐內容解
 
 export async function POST(request: Request) {
   try {
-    const { text, image, mimeType } = await request.json();
+    const { text, image, mimeType, images } = await request.json();
 
-    if (!text && !image) {
+    // images: [{ data, mimeType }]；image/mimeType 為舊版單張格式
+    const imageList: { data: string; mimeType?: string }[] = Array.isArray(
+      images
+    )
+      ? images.filter((img) => img?.data)
+      : image
+        ? [{ data: image, mimeType }]
+        : [];
+
+    if (!text && imageList.length === 0) {
       return NextResponse.json(
         { error: "請提供文字或圖片" },
         { status: 400 }
@@ -42,15 +51,20 @@ export async function POST(request: Request) {
 
     const parts: Part[] = [{ text: SYSTEM_PROMPT }];
 
-    if (image) {
+    if (imageList.length > 0) {
+      for (const img of imageList) {
+        parts.push({
+          inlineData: {
+            mimeType: img.mimeType || "image/png",
+            data: img.data,
+          },
+        });
+      }
       parts.push({
-        inlineData: {
-          mimeType: mimeType || "image/png",
-          data: image,
-        },
-      });
-      parts.push({
-        text: "請從這張圖片中辨識所有訂餐內容，解析成 JSON 陣列。",
+        text:
+          imageList.length > 1
+            ? "請從這幾張圖片中辨識所有訂餐內容，解析成一個 JSON 陣列。圖片可能是同一段對話的連續截圖，跨圖重複出現的訂單只算一筆。"
+            : "請從這張圖片中辨識所有訂餐內容，解析成 JSON 陣列。",
       });
     }
 
