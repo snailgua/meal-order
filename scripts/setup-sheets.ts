@@ -15,6 +15,7 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID!;
 
+// 欄位順序必須與 CLAUDE.md「Google Sheets 欄位對照」及各 API route 的 row[N] 索引一致
 const WORKSHEETS = [
   {
     title: "訂餐場次表",
@@ -23,18 +24,22 @@ const WORKSHEETS = [
       "日期",
       "標題",
       "負責人姓名",
-      "負責人銀行名稱",
-      "負責人銀行帳號",
-      "QR Code圖片連結",
+      "銀行名稱",
+      "銀行帳號",
+      "QR Code連結",
       "轉帳連結",
       "狀態",
       "建立時間",
+      "菜單圖片連結",
     ],
   },
   {
     title: "訂單明細表",
     headers: [
       "場次ID",
+      "日期",
+      "標題",
+      "負責人姓名",
       "姓名",
       "品項名稱",
       "價格",
@@ -47,13 +52,22 @@ const WORKSHEETS = [
     title: "付款追蹤表",
     headers: [
       "場次ID",
+      "日期",
+      "標題",
       "付款人姓名",
       "收款人姓名",
       "金額",
+      "品項名稱",
+      "備註",
       "付款人是否標記已付",
       "收款人是否確認收到",
       "核銷時間",
+      "付款人標記時間",
     ],
+  },
+  {
+    title: "問題回報表",
+    headers: ["回報時間", "姓名", "類型", "描述", "截圖連結"],
   },
 ];
 

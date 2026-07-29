@@ -35,6 +35,8 @@ export default function PaymentsPage() {
           new Date().toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei" })
         );
         setFetchError(false);
+      } else {
+        setFetchError(true);
       }
     } catch (err) {
       console.error("Failed to fetch payments:", err);
@@ -45,8 +47,15 @@ export default function PaymentsPage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/cleanup", { method: "POST" }).catch(() => {});
-    fetchPayments();
+    // cleanup 會刪列造成 rowIndex 位移，先等它跑完再抓資料
+    (async () => {
+      try {
+        await fetch("/api/cleanup", { method: "POST" });
+      } catch {
+        // cleanup 失敗不影響顯示
+      }
+      fetchPayments();
+    })();
     const interval = setInterval(fetchPayments, 10000);
     return () => clearInterval(interval);
   }, [fetchPayments]);
@@ -110,29 +119,39 @@ export default function PaymentsPage() {
   };
 
   const handleAction = async (
-    rowIndex: number,
+    payment: Payment,
     action: "payerConfirm" | "receiverConfirm"
   ) => {
     if (action === "receiverConfirm") {
       if (!confirm("這個按鍵只有開團的人可以點喔！\n確定要確認收到嗎？"))
         return;
     } else {
-      const payer = payments.find((p) => p.rowIndex === rowIndex)?.payer;
-      if (!confirm(`你是${payer}嗎？\n確認已經付錢了嗎？`)) return;
+      if (!confirm(`你是${payment.payer}嗎？\n確認已經付錢了嗎？`)) return;
     }
 
-    setActionLoading(rowIndex);
+    setActionLoading(payment.rowIndex);
     try {
       const res = await fetch("/api/payments", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rowIndex, action }),
+        body: JSON.stringify({
+          rowIndex: payment.rowIndex,
+          action,
+          // 帳款內容給後端驗證 rowIndex 沒被其他人的刪列位移
+          expected: {
+            sessionId: payment.sessionId,
+            payer: payment.payer,
+            amount: payment.amount,
+            item: payment.item,
+          },
+        }),
       });
       if (res.ok) {
         fetchPayments();
       } else {
         const data = await res.json();
         alert(data.error || "操作失敗");
+        if (res.status === 409) fetchPayments();
       }
     } catch {
       alert("網路錯誤，請稍後再試");
@@ -292,7 +311,7 @@ export default function PaymentsPage() {
                                 <div className="mt-2 flex gap-2">
                                   {!p.payerConfirmed && (
                                     <button
-                                      onClick={() => handleAction(p.rowIndex, "payerConfirm")}
+                                      onClick={() => handleAction(p, "payerConfirm")}
                                       disabled={isLoading}
                                       className="flex-1 bg-emerald-600 text-white py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700 disabled:opacity-50"
                                     >
@@ -301,7 +320,7 @@ export default function PaymentsPage() {
                                   )}
                                   {!p.receiverConfirmed && (
                                     <button
-                                      onClick={() => handleAction(p.rowIndex, "receiverConfirm")}
+                                      onClick={() => handleAction(p, "receiverConfirm")}
                                       disabled={isLoading}
                                       className="flex-1 bg-teal-600 text-white py-1.5 rounded-xl text-xs font-medium active:bg-teal-700 disabled:opacity-50"
                                     >

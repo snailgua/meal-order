@@ -39,10 +39,10 @@ export async function GET() {
         orderCount: orderCounts[row[0]]?.size || 0,
       }));
 
-    sessions.sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    // createdAt 是「2026/7/29 下午5:09:42」中文格式，new Date() 解析不了；
+    // 場次 ID 是 s_${Date.now()}，直接取時間戳排序
+    const idTs = (s: { id: string }) => Number(s.id.split("_")[1]) || 0;
+    sessions.sort((a, b) => idTs(b) - idTs(a));
 
     return NextResponse.json(sessions);
   } catch (error) {

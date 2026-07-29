@@ -36,10 +36,10 @@ export async function POST(request: Request) {
     for (const order of orders) {
       const name = (order.name || "").trim();
       const item = (order.item || "").trim();
-      const price = order.price;
+      const price = Number(order.price);
       const note = (order.note || "").trim();
 
-      if (!name || !item || price == null) continue;
+      if (!name || !item || !Number.isFinite(price) || price <= 0) continue;
 
       await appendRow("訂單明細表", [
         sessionId,

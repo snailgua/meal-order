@@ -99,12 +99,16 @@ export default function SessionPage({
         fetch(`/api/sessions/${id}`),
         fetch(`/api/orders?sessionId=${id}`),
       ]);
-      if (sessionRes.ok) setSession(await sessionRes.json());
-      if (ordersRes.ok) setOrders(await ordersRes.json());
-      setLastUpdated(
-        new Date().toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei" })
-      );
-      setFetchError(false);
+      if (!sessionRes.ok || !ordersRes.ok) {
+        setFetchError(true);
+      } else {
+        setSession(await sessionRes.json());
+        setOrders(await ordersRes.json());
+        setLastUpdated(
+          new Date().toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei" })
+        );
+        setFetchError(false);
+      }
     } catch (err) {
       console.error("Failed to fetch data:", err);
       setFetchError(true);
@@ -226,6 +230,12 @@ export default function SessionPage({
           price: Number(editForm.price),
           note: editForm.note,
           createdAt: editingOrder?.createdAt,
+          original: editingOrder && {
+            name: editingOrder.name,
+            item: editingOrder.item,
+            price: editingOrder.price,
+            createdAt: editingOrder.createdAt,
+          },
         }),
       });
       if (res.ok) {
@@ -234,6 +244,10 @@ export default function SessionPage({
       } else {
         const data = await res.json();
         alert(data.error || "更新失敗");
+        if (res.status === 409) {
+          setEditingRowIndex(null);
+          fetchData();
+        }
       }
     } catch {
       alert("網路錯誤，請稍後再試");
@@ -242,10 +256,18 @@ export default function SessionPage({
     }
   };
 
-  const handleDeleteOrder = async (rowIndex: number) => {
+  const handleDeleteOrder = async (order: Order) => {
     if (!confirm("確定要刪除此訂單？")) return;
     try {
-      const res = await fetch(`/api/orders?rowIndex=${rowIndex}`, {
+      const params = new URLSearchParams({
+        rowIndex: String(order.rowIndex),
+        sessionId: order.sessionId,
+        name: order.name,
+        item: order.item,
+        price: String(order.price),
+        createdAt: order.createdAt || "",
+      });
+      const res = await fetch(`/api/orders?${params}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -253,6 +275,7 @@ export default function SessionPage({
       } else {
         const data = await res.json();
         alert(data.error || "刪除失敗");
+        if (res.status === 409) fetchData();
       }
     } catch {
       alert("網路錯誤，請稍後再試");
@@ -888,7 +911,7 @@ export default function SessionPage({
               }
               placeholder="例如：100"
               className={inputClass}
-              min="0"
+              min="1"
               required
             />
           </div>
@@ -1026,7 +1049,7 @@ export default function SessionPage({
                               }}
                               className="w-20 border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-200"
                               placeholder="價格"
-                              min="0"
+                              min="1"
                             />
                           </div>
                           <div className="flex gap-2">
@@ -1156,7 +1179,7 @@ export default function SessionPage({
                     }
                     className={inputClass}
                     placeholder="價格"
-                    min="0"
+                    min="1"
                     required
                   />
                   <input
@@ -1217,7 +1240,7 @@ export default function SessionPage({
                         編輯
                       </button>
                       <button
-                        onClick={() => handleDeleteOrder(order.rowIndex)}
+                        onClick={() => handleDeleteOrder(order)}
                         className="text-rose-400 text-xs px-2 py-1 border border-rose-200 rounded-lg"
                       >
                         刪除

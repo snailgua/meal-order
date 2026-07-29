@@ -541,7 +541,7 @@ export default function HomePage() {
                             }}
                             className="w-20 border border-stone-200 rounded-lg px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-200"
                             placeholder="價格"
-                            min="0"
+                            min="1"
                           />
                         </div>
                         <div className="flex gap-2">

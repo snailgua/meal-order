@@ -81,14 +81,44 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { rowIndex, action } = body;
+    const { rowIndex, action, expected } = body;
 
     if (!rowIndex || !action) {
       return NextResponse.json({ error: "缺少必要參數" }, { status: 400 });
     }
 
     const rows = await getRows("付款追蹤表");
-    const row = rows[rowIndex - 1];
+
+    // rowIndex 是客戶端讀取當下的列號，別人刪列（如 cleanup、刪訂單）後會位移。
+    // 用 expected 內容驗證，不符就重新定位，避免確認到別人的帳款。
+    let targetRow = rowIndex;
+    if (expected) {
+      const matches = (r: string[] | undefined) =>
+        !!r &&
+        r[0] === expected.sessionId &&
+        r[3] === expected.payer &&
+        Number(r[5]) === Number(expected.amount) &&
+        (r[6] || "") === (expected.item || "") &&
+        !r[10]; // 未核銷
+
+      if (!matches(rows[rowIndex - 1])) {
+        targetRow = 0;
+        for (let i = 1; i < rows.length; i++) {
+          if (matches(rows[i])) {
+            targetRow = i + 1;
+            break;
+          }
+        }
+        if (!targetRow) {
+          return NextResponse.json(
+            { error: "這筆帳款已變動或已核銷，請重新整理後再試" },
+            { status: 409 }
+          );
+        }
+      }
+    }
+
+    const row = rows[targetRow - 1];
 
     if (!row) {
       return NextResponse.json({ error: "找不到此筆帳款" }, { status: 404 });
@@ -126,7 +156,7 @@ export async function PATCH(request: Request) {
       if (row[i] === undefined || row[i] === null) row[i] = "";
     }
 
-    await updateRow("付款追蹤表", rowIndex, row);
+    await updateRow("付款追蹤表", targetRow, row);
 
     return NextResponse.json({ success: true });
   } catch (error) {
