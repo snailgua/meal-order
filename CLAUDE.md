@@ -8,10 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev        # 啟動 dev server（Turbopack）
 npm run build      # 生產建置
 npm run lint       # ESLint（next core-web-vitals + typescript）
+npm test           # Node test runner（tsx）
 npm start          # 啟動生產 server
 ```
 
-沒有測試框架 — 無 test 指令。變更後用 `npm run build` 驗證型別與建置正確性。
+變更後至少執行 `npm test`、`npm run lint` 與 `npm run build`。
 
 ## 路徑別名
 
@@ -243,11 +244,13 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
   - QR Code 和銀行資訊使用該收款人**最新場次**的資料，確保團主更新 QR Code 後舊帳款也能看到新的。
   - **付款頁直接更新 QR Code**：收款人卡片上有「更新 QR Code / 設定 QR Code」按鈕，點擊後上傳新圖會 PATCH 該收款人**最新場次**的 QR（因為 QR 常有時限，需頻繁更新）。信任制，不驗證身份。
   - 「我已轉帳」和「確認收到」按鈕同時顯示；團主按「確認收到」即直接核銷，不需付款人先標記。付款頁可一鍵複製收款人銀行帳號。
+  - 已標記轉帳但尚未核銷的欠款有「**按錯了**」可撤銷標記（`payerUndo`）。信任制下誤按很常見，而「已標記付款」會讓來源訂單再也不能修改或刪除，沒有回頭路只能人工改 Sheet。
+  - **欠款只在核銷或刪除時才會從清單消失**。場次重新開放中的欠款照常顯示並可確認，只加上「金額可能還會變動」提示；場次列遺失的孤兒欠款也照常顯示、可核銷。靜默隱藏會讓人以為帳已經清掉。
 - **Email 通知**：問題回報送出後自動寄 email 通知管理者（透過 nodemailer + Gmail SMTP）。環境變數：`SMTP_EMAIL`, `SMTP_PASSWORD`, `NOTIFICATION_EMAIL`。
 - **時區修正**：所有 API 時間戳使用 `Asia/Taipei` 時區（`toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })`），非 UTC。
 - **圖片全螢幕檢視**：QR Code 和菜單圖片點擊後以全螢幕 modal 放大檢視。
-- **自動輪詢**：場次頁與付款頁每 10 秒自動刷新資料，畫面顯示最後更新時間與錯誤狀態。
-- **自動清理**：進入付款追蹤頁時自動呼叫 cleanup API，清除 3 個月前已核銷的紀錄。
+- **自動輪詢**：首頁、場次頁與付款頁透過 `usePolling`（`src/lib/usePolling.ts`）每 15 秒刷新，**分頁切到背景時停止輪詢、回前景立刻補抓一次**。每次輪詢是 2 次 Sheets 讀取，免費額度只有 300 次/分鐘/專案，不減量的話幾十人同時開著就會 429。畫面顯示最後更新時間與錯誤狀態。
+- **自動清理**：進入付款追蹤頁時自動呼叫 cleanup API；3 個月前、已有訂單 ID 的核銷列會清除付款個資並壓成封存標記，保留 sessionId/orderId/核銷狀態，避免日後對帳把已付訂單重新建成欠款。
 - **使用教學頁面**（`/guide`）：流程圖風格說明訂餐與付款流程，含信任制提醒、Google Sheet 連結。
 - **問題回報頁面**（`/feedback`）：表單寫入 Google Sheets「問題回報表」，問題類型下拉選單（Bug 回報/功能建議/其他），支援多張截圖上傳（GCS）。送出後寄 email 通知。
 - **底部導覽列 4 tab**：怎麼用？→ 今日訂餐（預設）→ 付款追蹤 → 回報問題
@@ -269,7 +272,7 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
 ### Google Sheets 欄位對照（API 使用 array index，改欄位必須同步改 API）
 
 **訂餐場次表：**
-`[0]場次ID [1]日期 [2]標題 [3]負責人姓名 [4]銀行名稱 [5]銀行帳號 [6]QR Code連結 [7]轉帳連結 [8]狀態 [9]建立時間 [10]菜單圖片連結(逗號分隔)`
+`[0]場次ID [1]日期 [2]標題 [3]負責人姓名 [4]負責人銀行名稱 [5]負責人銀行帳號 [6]QR Code圖片連結 [7]轉帳連結 [8]狀態 [9]建立時間 [10]菜單圖片連結(逗號分隔) [11]版本(最後成功 mutation 的 requestId)`
 
 **訂單明細表：**
 `[0]場次ID [1]日期 [2]標題 [3]負責人姓名 [4]姓名 [5]品項名稱 [6]價格 [7]備註 [8]建立時間 [9]最後修改時間 [10]訂單ID`
@@ -278,7 +281,7 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
 `[0]場次ID [1]日期 [2]標題 [3]付款人姓名 [4]收款人姓名 [5]金額 [6]品項名稱 [7]備註 [8]付款人是否標記已付 [9]收款人是否確認收到 [10]核銷時間 [11]付款人標記時間 [12]訂單ID(來源訂單)`
 
 **問題回報表：**
-`[0]回報時間 [1]姓名 [2]類型 [3]描述 [4]截圖連結(逗號分隔)`
+`[0]回報時間 [1]姓名 [2]類型 [3]描述 [4]截圖連結(逗號分隔) [5]回覆(人工填寫)`
 
 ### 關鍵檔案結構
 
@@ -313,8 +316,11 @@ src/
 ### 已知注意事項
 
 1. **欄位索引硬編碼**：所有 API route 使用 `row[N]` 存取 Google Sheets 欄位，若在 Google Sheets 中新增/刪除/移動欄位，必須同步更新對應的 API route
-1a. **以訂單ID定位，不用列號**：訂單有不可變的 `[10]訂單ID`（`o_<ts>_<rand>`，建立時產生），付款列以 `[12]訂單ID` 對應來源訂單。訂單 PUT/DELETE 與付款 PATCH 優先用 ID 定位；無 ID 的舊資料退回「rowIndex + 內容驗證」（客戶端帶 `original`/`expected`），找不到回 409。2026-07-29 已用 `scripts/backfill-order-ids.ts` 幫既有資料補過 ID
-1b. **付款列一致性靠 `reconcilePayments()`**（`src/lib/reconcilePayments.ts`）：以訂單為準冪等對帳（已核銷列永不動、未核銷列同步/刪重複/刪孤兒、缺的補建）。呼叫時機：關閉場次、已關閉場次更改團主、訂單寫入後發現場次已關閉。訂單編輯/刪除另有針對單筆的付款同步（含「訂購人改成/改自團主」的建刪）。付款確認用 `updateCells` 單格寫入，避免併發整列覆寫
+1a. **以訂單ID定位，不用列號**：訂單有不可變的 `[10]訂單ID`，付款列以 `[12]訂單ID` 對應來源訂單。建立場次、單筆訂單與批次匯入由前端產生 timestamped UUID `requestId`，伺服器用它產生 deterministic ID 並辨識失敗重送，避免 append 成功但回應遺失後重複建單。訂單 PUT/DELETE 與付款 PATCH 優先用 ID 定位；無 ID 的舊資料退回「rowIndex + 內容驗證」（客戶端帶 `original`/`expected`），找不到回 409。`scripts/backfill-order-ids.ts` 預設只 dry-run；apply 前必須停寫、備份並帶齊 maintenance flags
+1b. **付款列一致性靠 `reconcilePayments()`**（`src/lib/reconcilePayments.ts`）：以訂單為準冪等對帳（已核銷/已有付款證據的衝突列保留、未確認列同步/刪重複/刪孤兒、缺的補建）。同一場次的訂單、場次狀態與付款 mutation 會先用 GCS generation precondition 取得跨 instance lock；需跨表變更時再用單一 Sheets `batchUpdate` 原子套用，避免關閉/新增、修改/付款同時交錯或只成功一半。場次 PATCH 另以 `[11]版本` 做 CAS，避免關閉→重開後舊關閉請求才抵達的 stale retry。已有人標記付款後不可修改或刪除來源訂單，也不可更換團主
+1c. **刪除採 tombstone，不做實體刪列**：刪除會把 A 欄改成 `__DELETED__`；有 immutable ID 的資源使用 `__DELETED__:<ID>` 保留 durable key，其餘欄位清空。這既避免後續列號位移，也防止已刪資源被延遲的舊 POST 重新建立。若需壓縮空列，必須先讓部署進入 `SHEETS_MAINTENANCE_MODE=1` 並離線處理
+1d. **Sheets 429 是常態，不是意外**：免費額度 300 次讀取/分鐘/專案，而 50-60 人開著輪詢頁面很容易撞到。`src/lib/sheets.ts` 的每個 API 呼叫都包了指數退避重試（429/5xx，最多 4 次）；前端則靠 `usePolling` 在背景分頁停止輪詢來減量。新增讀取路徑時要一併考慮這個額度
+1e. **requestId 一律用 `newRequestId()`**（`src/lib/requestId.ts`），不要直接寫 `crypto.randomUUID()`：它只在 secure context 存在，手機連區網 dev server（http）或舊 in-app 瀏覽器會是 undefined，少了 fallback 整個 app 會完全無法寫入。格式必須通過 `idempotencyKey()` 驗證，`requestId.test.ts` 有守住這個契約
 2. **圖片需公開讀取**：GCS bucket 必須授予 `allUsers` 為 Storage Object Viewer，否則圖片 URL 會 403
 3. **文字自動 trim**：所有使用者輸入的文字欄位（姓名、品項、備註、標題等）在寫入 Sheets 前會自動 `.trim()`
 4. **信任制操作警告**：「我已轉帳」會提示付款人姓名確認、「確認收到」和「重新開放訂餐」和「關閉訂餐」按鈕會跳 confirm 警告，提醒只有團主/收款人才該點

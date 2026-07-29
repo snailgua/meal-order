@@ -10,6 +10,7 @@ export interface Session {
   menuImages: string[];
   status: "開放中" | "已關閉";
   createdAt: string;
+  version: string;
   orderCount: number;
 }
 
@@ -46,4 +47,7 @@ export interface Payment {
   bankAccount: string;
   qrCodeUrl: string;
   transferLink: string;
+  sessionVersion: string;
+  /** 場次重新開放中：金額可能還會變動 */
+  sessionOpen: boolean;
 }

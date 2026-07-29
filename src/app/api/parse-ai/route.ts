@@ -5,6 +5,18 @@ import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 export const maxDuration = 60;
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const MAX_IMAGES = 6;
+const MAX_IMAGE_PAYLOAD_CHARS = 3_500_000;
+const MAX_TEXT_LENGTH = 50_000;
+const SUPPORTED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+  "image/heic",
+  "image/heif",
+]);
 
 const SYSTEM_PROMPT = `你是一個訂餐文字解析器。請把訂餐內容解析成 JSON 陣列。
 
@@ -25,15 +37,54 @@ export async function POST(request: Request) {
     const { text, image, mimeType, images } = await request.json();
 
     // images: [{ data, mimeType }]；image/mimeType 為舊版單張格式
-    const imageList: { data: string; mimeType?: string }[] = Array.isArray(
-      images
-    )
-      ? images.filter((img) => img?.data)
+    const rawImageList = Array.isArray(images)
+      ? images
       : image
-        ? [{ data: image, mimeType }]
+        ? [
+            {
+              data: image,
+              mimeType: typeof mimeType === "string" ? mimeType : "image/png",
+            },
+          ]
         : [];
+    if (
+      (text !== undefined && typeof text !== "string") ||
+      (typeof text === "string" && text.length > MAX_TEXT_LENGTH) ||
+      rawImageList.length > MAX_IMAGES
+    ) {
+      return NextResponse.json(
+        { error: "文字或圖片數量超過限制" },
+        { status: 400 }
+      );
+    }
 
-    if (!text && imageList.length === 0) {
+    const imageList: { data: string; mimeType: string }[] = [];
+    let imagePayloadSize = 0;
+    for (const raw of rawImageList) {
+      if (
+        !raw ||
+        typeof raw !== "object" ||
+        typeof raw.data !== "string" ||
+        !raw.data ||
+        typeof raw.mimeType !== "string" ||
+        !SUPPORTED_IMAGE_TYPES.has(raw.mimeType)
+      ) {
+        return NextResponse.json(
+          { error: "圖片格式不正確" },
+          { status: 400 }
+        );
+      }
+      imagePayloadSize += raw.data.length;
+      if (imagePayloadSize > MAX_IMAGE_PAYLOAD_CHARS) {
+        return NextResponse.json(
+          { error: "圖片總大小超過限制" },
+          { status: 413 }
+        );
+      }
+      imageList.push({ data: raw.data, mimeType: raw.mimeType });
+    }
+
+    if (!(typeof text === "string" && text.trim()) && imageList.length === 0) {
       return NextResponse.json(
         { error: "請提供文字或圖片" },
         { status: 400 }
@@ -92,19 +143,25 @@ export async function POST(request: Request) {
     }
 
     const validated = orders
-      .filter(
-        (o: Record<string, unknown>) =>
-          o.name &&
-          o.item &&
-          typeof o.price === "number" &&
-          o.price > 0
-      )
+      .filter((o: unknown): o is Record<string, unknown> => {
+        if (!o || typeof o !== "object" || Array.isArray(o)) return false;
+        const record = o as Record<string, unknown>;
+        return (
+          typeof record.name === "string" &&
+          typeof record.item === "string" &&
+          typeof record.price === "number" &&
+          Number.isFinite(record.price) &&
+          record.price > 0
+        );
+      })
       .map((o: Record<string, unknown>) => ({
         name: String(o.name).trim(),
         item: String(o.item).trim(),
         price: Number(o.price),
         note: o.note ? String(o.note).trim() : "",
-      }));
+      }))
+      .filter((order) => order.name && order.item)
+      .slice(0, 200);
 
     return NextResponse.json({ orders: validated });
   } catch (error) {

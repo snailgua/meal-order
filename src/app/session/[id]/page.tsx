@@ -5,6 +5,32 @@ import { useRouter } from "next/navigation";
 import type { Order } from "@/types";
 import { parseTranscriptText } from "@/lib/parseTranscript";
 import { imageFileToBase64 } from "@/lib/compressImage";
+import { newRequestId } from "@/lib/requestId";
+import { usePolling } from "@/lib/usePolling";
+
+const MAX_TRANSCRIPT_IMAGES = 6;
+const MAX_TRANSCRIPT_RAW_BYTES = 30 * 1024 * 1024;
+const MAX_AI_IMAGE_PAYLOAD_CHARS = 3_500_000;
+const MAX_BATCH_ORDERS = 200;
+const MAX_ORDER_TEXT_LENGTH = 200;
+const MAX_ORDER_NOTE_LENGTH = 1_000;
+
+interface StableRequestId {
+  signature: string;
+  requestId: string;
+}
+
+function getStableRequestId(
+  requestRef: { current: StableRequestId | null },
+  signature: string
+) {
+  if (requestRef.current?.signature === signature) {
+    return requestRef.current.requestId;
+  }
+  const requestId = newRequestId();
+  requestRef.current = { signature, requestId };
+  return requestId;
+}
 
 interface SessionDetail {
   id: string;
@@ -18,6 +44,7 @@ interface SessionDetail {
   menuImages: string[];
   status: "開放中" | "已關閉";
   createdAt: string;
+  version: string;
 }
 
 interface ItemStat {
@@ -62,6 +89,7 @@ export default function SessionPage({
   const [viewImage, setViewImage] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [fetchError, setFetchError] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   const [orderForm, setOrderForm] = useState({
     name: "",
@@ -88,6 +116,11 @@ export default function SessionPage({
   const [editingParsedIndex, setEditingParsedIndex] = useState<number | null>(null);
   const [aiParsing, setAiParsing] = useState(false);
   const [transcriptImages, setTranscriptImages] = useState<File[]>([]);
+  const addOrderRequestRef = useRef<StableRequestId | null>(null);
+  const transcriptBatchRequestRef = useRef<StableRequestId | null>(null);
+  const sessionPatchRequestRef = useRef<StableRequestId | null>(null);
+  const titleExpectedVersionRef = useRef("");
+  const infoExpectedVersionRef = useRef("");
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
@@ -102,11 +135,17 @@ export default function SessionPage({
         fetch(`/api/sessions/${id}`),
         fetch(`/api/orders?sessionId=${id}`),
       ]);
-      if (!sessionRes.ok || !ordersRes.ok) {
+      if (sessionRes.status === 404) {
+        setSession(null);
+        setOrders([]);
+        setNotFound(true);
+        setFetchError(false);
+      } else if (!sessionRes.ok || !ordersRes.ok) {
         setFetchError(true);
       } else {
         setSession(await sessionRes.json());
         setOrders(await ordersRes.json());
+        setNotFound(false);
         setLastUpdated(
           new Date().toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei" })
         );
@@ -120,11 +159,7 @@ export default function SessionPage({
     }
   }, [id]);
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+  usePolling(fetchData);
 
   // Statistics
   const stats: ItemStat[] = useMemo(() => {
@@ -188,6 +223,17 @@ export default function SessionPage({
 
   const handleAddOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = {
+      sessionId: id,
+      name: orderForm.name,
+      item: orderForm.item,
+      price: Number(orderForm.price),
+      note: orderForm.note,
+    };
+    const requestId = getStableRequestId(
+      addOrderRequestRef,
+      JSON.stringify(payload)
+    );
     setSubmitting(true);
     try {
       localStorage.setItem("userName", orderForm.name);
@@ -195,14 +241,12 @@ export default function SessionPage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: id,
-          name: orderForm.name,
-          item: orderForm.item,
-          price: Number(orderForm.price),
-          note: orderForm.note,
+          ...payload,
+          requestId,
         }),
       });
       if (res.ok) {
+        addOrderRequestRef.current = null;
         setOrderForm((prev) => ({ ...prev, item: "", price: "", note: "" }));
         fetchData();
       } else {
@@ -237,7 +281,9 @@ export default function SessionPage({
             name: editingOrder.name,
             item: editingOrder.item,
             price: editingOrder.price,
+            note: editingOrder.note,
             createdAt: editingOrder.createdAt,
+            updatedAt: editingOrder.updatedAt,
           },
         }),
       });
@@ -269,7 +315,9 @@ export default function SessionPage({
         name: order.name,
         item: order.item,
         price: String(order.price),
+        note: order.note || "",
         createdAt: order.createdAt || "",
+        updatedAt: order.updatedAt || "",
       });
       const res = await fetch(`/api/orders?${params}`, {
         method: "DELETE",
@@ -287,20 +335,33 @@ export default function SessionPage({
   };
 
   const handleCloseSession = async () => {
-    if (statusChanging) return;
+    if (statusChanging || !session) return;
     if (!confirm("你是團主嗎？團主才能按關閉訂單哦～請不要亂按關閉訂單。\n\n確定要關閉訂餐？關閉後將無法新增訂單。")) return;
     setStatusChanging(true);
+    const payload = {
+      status: "已關閉",
+      expectedVersion: session.version,
+    };
+    const requestId = getStableRequestId(
+      sessionPatchRequestRef,
+      JSON.stringify(payload)
+    );
     try {
       const res = await fetch(`/api/sessions/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "已關閉" }),
+        body: JSON.stringify({ ...payload, requestId }),
       });
       if (res.ok) {
+        sessionPatchRequestRef.current = null;
         await fetchData();
       } else {
         const data = await res.json();
         alert(data.error || "關閉失敗");
+        if (res.status === 409) {
+          sessionPatchRequestRef.current = null;
+          await fetchData();
+        }
       }
     } catch {
       alert("網路錯誤，請稍後再試");
@@ -310,20 +371,33 @@ export default function SessionPage({
   };
 
   const handleReopenSession = async () => {
-    if (statusChanging) return;
+    if (statusChanging || !session) return;
     if (!confirm("這個按鍵只有團主才能按喔！\n不然開了也沒人處理喲～\n\n確定要重新開放訂餐嗎？")) return;
     setStatusChanging(true);
+    const payload = {
+      status: "開放中",
+      expectedVersion: session.version,
+    };
+    const requestId = getStableRequestId(
+      sessionPatchRequestRef,
+      JSON.stringify(payload)
+    );
     try {
       const res = await fetch(`/api/sessions/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "開放中" }),
+        body: JSON.stringify({ ...payload, requestId }),
       });
       if (res.ok) {
+        sessionPatchRequestRef.current = null;
         await fetchData();
       } else {
         const data = await res.json();
         alert(data.error || "重新開放失敗");
+        if (res.status === 409) {
+          sessionPatchRequestRef.current = null;
+          await fetchData();
+        }
       }
     } catch {
       alert("網路錯誤，請稍後再試");
@@ -333,6 +407,7 @@ export default function SessionPage({
   };
 
   const handleDeleteSession = async () => {
+    if (!session) return;
     if (
       !confirm(
         "確定要刪除此場次嗎？\n此操作將同時刪除所有訂單與付款紀錄，且無法復原！"
@@ -341,7 +416,12 @@ export default function SessionPage({
       return;
     if (!confirm("再次確認：真的要永久刪除這個場次嗎？")) return;
     try {
-      const res = await fetch(`/api/sessions/${id}`, { method: "DELETE" });
+      const params = new URLSearchParams({
+        expectedVersion: session.version,
+      });
+      const res = await fetch(`/api/sessions/${id}?${params}`, {
+        method: "DELETE",
+      });
       if (res.ok) {
         router.push("/");
       } else {
@@ -366,36 +446,69 @@ export default function SessionPage({
   const parseTranscript = async () => {
     // 有圖片 → 直接走 AI
     if (transcriptImages.length > 0) {
+      const filesToParse = [...transcriptImages];
+      const submittedText = transcriptText.trim();
+      if (filesToParse.length > MAX_TRANSCRIPT_IMAGES) {
+        setFailedLines([
+          `一次最多解析 ${MAX_TRANSCRIPT_IMAGES} 張截圖，請移除部分圖片後再試`,
+        ]);
+        return;
+      }
+      const rawTotalBytes = filesToParse.reduce(
+        (sum, file) => sum + file.size,
+        0
+      );
+      if (rawTotalBytes > MAX_TRANSCRIPT_RAW_BYTES) {
+        setFailedLines([
+          "截圖原始檔總大小超過 30 MB，請一次少選幾張、分批解析",
+        ]);
+        return;
+      }
+
       setAiParsing(true);
       setFailedLines([]);
       try {
-        const images = await Promise.all(
-          transcriptImages.map(async (f) => {
-            const { base64, mimeType } = await imageFileToBase64(f);
-            return { data: base64, mimeType };
-          })
-        );
-        // Vercel request body 上限 4.5MB，超過會直接 413
-        const totalSize = images.reduce((sum, img) => sum + img.data.length, 0);
-        if (totalSize > 3_500_000) {
-          setFailedLines([
-            "截圖總大小超過限制，請一次少選幾張、分批解析（解析結果會累加）",
-          ]);
-          setAiParsing(false);
-          return;
+        const images: { data: string; mimeType: string }[] = [];
+        let payloadSize = 0;
+        for (const file of filesToParse) {
+          const { base64, mimeType } = await imageFileToBase64(file);
+          payloadSize += base64.length;
+          // Vercel request body 上限 4.5MB，預留 JSON 開銷
+          if (payloadSize > MAX_AI_IMAGE_PAYLOAD_CHARS) {
+            setFailedLines([
+              "截圖總大小超過限制，請一次少選幾張、分批解析（解析結果會累加）",
+            ]);
+            return;
+          }
+          images.push({ data: base64, mimeType });
         }
+
         const res = await fetch("/api/parse-ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             images,
-            text: transcriptText.trim() || undefined,
+            text: submittedText || undefined,
           }),
         });
         if (res.ok) {
           const data = await res.json();
-          setParsedOrders((prev) => [...prev, ...data.orders]); // 分批解析累加
-          setTranscriptImages([]); // 避免再按一次重複匯入
+          const orders = Array.isArray(data.orders) ? data.orders : [];
+          if (orders.length === 0) {
+            setFailedLines([
+              "AI 沒有辨識到可匯入的訂單，截圖與文字已保留，請確認內容後再試",
+            ]);
+            return;
+          }
+          setParsedOrders((prev) => [...prev, ...orders]); // 分批解析累加
+          setTranscriptImages((current) =>
+            current.filter((file) => !filesToParse.includes(file))
+          );
+          if (submittedText) {
+            setTranscriptText((current) =>
+              current.trim() === submittedText ? "" : current
+            );
+          }
         } else {
           const data = await res.json().catch(() => null);
           setFailedLines([
@@ -418,7 +531,7 @@ export default function SessionPage({
     const failed = result.failedLines;
 
     if (failed.length === 0 && regexOrders.length > 0) {
-      setParsedOrders(regexOrders);
+      setParsedOrders((prev) => [...prev, ...regexOrders]);
       setFailedLines([]);
       return;
     }
@@ -435,13 +548,21 @@ export default function SessionPage({
       });
       if (res.ok) {
         const data = await res.json();
-        setParsedOrders([...regexOrders, ...data.orders]);
+        const aiOrders = Array.isArray(data.orders) ? data.orders : [];
+        setParsedOrders((prev) => [...prev, ...regexOrders, ...aiOrders]);
+        if (aiOrders.length === 0) {
+          setFailedLines([
+            regexOrders.length > 0
+              ? "AI 沒有辨識到其他可匯入的訂單，原有草稿與文字已保留，請確認內容後再試"
+              : "AI 沒有辨識到可匯入的訂單，原有草稿與文字已保留，請確認內容後再試",
+          ]);
+        }
       } else {
-        setParsedOrders(regexOrders);
+        setParsedOrders((prev) => [...prev, ...regexOrders]);
         setFailedLines(failed.length > 0 ? failed : [transcriptText]);
       }
     } catch {
-      setParsedOrders(regexOrders);
+      setParsedOrders((prev) => [...prev, ...regexOrders]);
       setFailedLines(failed.length > 0 ? failed : [transcriptText]);
     } finally {
       setAiParsing(false);
@@ -450,15 +571,52 @@ export default function SessionPage({
 
   const handleTranscriptImport = async () => {
     if (parsedOrders.length === 0) return;
+    const invalidIndex = parsedOrders.findIndex(
+      (order) =>
+        typeof order.name !== "string" ||
+        order.name.trim() === "" ||
+        order.name.trim().length > MAX_ORDER_TEXT_LENGTH ||
+        typeof order.item !== "string" ||
+        order.item.trim() === "" ||
+        order.item.trim().length > MAX_ORDER_TEXT_LENGTH ||
+        typeof order.price !== "number" ||
+        !Number.isFinite(order.price) ||
+        order.price <= 0 ||
+        typeof order.note !== "string" ||
+        order.note.trim().length > MAX_ORDER_NOTE_LENGTH
+    );
+    if (invalidIndex !== -1) {
+      setEditingParsedIndex(invalidIndex);
+      alert(
+        `第 ${invalidIndex + 1} 筆訂單格式不正確：姓名、品項須在 ${MAX_ORDER_TEXT_LENGTH} 字內，備註須在 ${MAX_ORDER_NOTE_LENGTH} 字內，價格須大於 0`
+      );
+      return;
+    }
+    if (parsedOrders.length > MAX_BATCH_ORDERS) {
+      alert(
+        `一次最多匯入 ${MAX_BATCH_ORDERS} 筆訂單，請刪除部分訂單後再試`
+      );
+      return;
+    }
+
+    const payload = {
+      sessionId: id,
+      orders: parsedOrders.map((order) => ({ ...order })),
+    };
+    const requestId = getStableRequestId(
+      transcriptBatchRequestRef,
+      JSON.stringify(payload)
+    );
     setTranscriptSubmitting(true);
     try {
       const res = await fetch("/api/orders/batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: id, orders: parsedOrders }),
+        body: JSON.stringify({ ...payload, requestId }),
       });
       if (res.ok) {
         const data = await res.json();
+        transcriptBatchRequestRef.current = null;
         alert(`成功匯入 ${data.created} 筆訂單！`);
         setTranscriptText("");
         setParsedOrders([]);
@@ -489,7 +647,11 @@ export default function SessionPage({
   if (!session) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12 text-center text-stone-400">
-        {fetchError ? "載入失敗，請稍後重新整理" : "找不到此場次"}
+        {notFound
+          ? "找不到此場次"
+          : fetchError
+            ? "載入失敗，請稍後重新整理"
+            : "找不到此場次"}
       </div>
     );
   }
@@ -520,18 +682,32 @@ export default function SessionPage({
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+                const payload = {
+                  title: titleDraft,
+                  expectedVersion: titleExpectedVersionRef.current,
+                };
+                const requestId = getStableRequestId(
+                  sessionPatchRequestRef,
+                  JSON.stringify(payload)
+                );
                 try {
                   const res = await fetch(`/api/sessions/${id}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ title: titleDraft }),
+                    body: JSON.stringify({ ...payload, requestId }),
                   });
                   if (res.ok) {
+                    sessionPatchRequestRef.current = null;
                     setEditingTitle(false);
                     fetchData();
                   } else {
                     const data = await res.json();
                     alert(data.error || "更新失敗");
+                    if (res.status === 409) {
+                      sessionPatchRequestRef.current = null;
+                      setEditingTitle(false);
+                      fetchData();
+                    }
                   }
                 } catch {
                   alert("網路錯誤，請稍後再試");
@@ -569,6 +745,7 @@ export default function SessionPage({
               <button
                 onClick={() => {
                   setTitleDraft(session.title);
+                  titleExpectedVersionRef.current = session.version;
                   setEditingTitle(true);
                 }}
                 className="text-stone-400 text-xs px-1.5 py-0.5 border border-stone-200 rounded-lg"
@@ -591,25 +768,37 @@ export default function SessionPage({
           <form
             onSubmit={async (e) => {
               e.preventDefault();
+              const payload = {
+                organizer: infoDraft.organizer,
+                bankName: infoDraft.bankName,
+                bankAccount: infoDraft.bankAccount,
+                qrCodeUrl: infoDraft.qrCodeUrl,
+                transferLink: infoDraft.transferLink,
+                menuImages: infoDraft.menuImages.join(","),
+                expectedVersion: infoExpectedVersionRef.current,
+              };
+              const requestId = getStableRequestId(
+                sessionPatchRequestRef,
+                JSON.stringify(payload)
+              );
               try {
                 const res = await fetch(`/api/sessions/${id}`, {
                   method: "PATCH",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    organizer: infoDraft.organizer,
-                    bankName: infoDraft.bankName,
-                    bankAccount: infoDraft.bankAccount,
-                    qrCodeUrl: infoDraft.qrCodeUrl,
-                    transferLink: infoDraft.transferLink,
-                    menuImages: infoDraft.menuImages.join(","),
-                  }),
+                  body: JSON.stringify({ ...payload, requestId }),
                 });
                 if (res.ok) {
+                  sessionPatchRequestRef.current = null;
                   setEditingInfo(false);
                   fetchData();
                 } else {
                   const data = await res.json();
                   alert(data.error || "更新失敗");
+                  if (res.status === 409) {
+                    sessionPatchRequestRef.current = null;
+                    setEditingInfo(false);
+                    fetchData();
+                  }
                 }
               } catch {
                 alert("網路錯誤，請稍後再試");
@@ -834,6 +1023,7 @@ export default function SessionPage({
                   transferLink: session.transferLink || "",
                   menuImages: session.menuImages || [],
                 });
+                infoExpectedVersionRef.current = session.version;
                 setEditingInfo(true);
               }}
               className="text-stone-400 text-xs px-1.5 py-0.5 border border-stone-200 rounded-lg shrink-0"
@@ -1195,7 +1385,7 @@ export default function SessionPage({
                 ? editingOrder.id === order.id
                 : editingOrder.rowIndex === order.rowIndex) ? (
                 <form
-                  key={order.rowIndex}
+                  key={order.id || `row-${order.rowIndex}`}
                   onSubmit={handleEditOrder}
                   className="py-4 space-y-2"
                 >
@@ -1257,7 +1447,10 @@ export default function SessionPage({
                   </div>
                 </form>
               ) : (
-                <div key={order.rowIndex} className="py-3.5">
+                <div
+                  key={order.id || `row-${order.rowIndex}`}
+                  className="py-3.5"
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">

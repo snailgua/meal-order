@@ -17,7 +17,8 @@ export async function uploadFile(
   fileName: string,
   mimeType: string
 ): Promise<string> {
-  const ext = fileName.match(/\.[^.]+$/)?.[0] || ".png";
+  const candidateExt = fileName.match(/\.[a-zA-Z0-9]{1,10}$/)?.[0];
+  const ext = candidateExt || ".png";
   const objectName = `${randomUUID()}${ext}`;
 
   await storage.objects.insert({

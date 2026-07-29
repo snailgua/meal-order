@@ -1,10 +1,52 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import type { Session } from "@/types";
 import { parseTranscriptText, type ParsedOrder } from "@/lib/parseTranscript";
 import { imageFileToBase64 } from "@/lib/compressImage";
+import { newRequestId } from "@/lib/requestId";
+import { usePolling } from "@/lib/usePolling";
+
+const MAX_TRANSCRIPT_IMAGES = 6;
+const MAX_TRANSCRIPT_RAW_BYTES = 30 * 1024 * 1024;
+const MAX_AI_IMAGE_PAYLOAD_CHARS = 3_500_000;
+const MAX_BATCH_ORDERS = 200;
+const MAX_ORDER_TEXT_LENGTH = 200;
+const MAX_ORDER_NOTE_LENGTH = 1_000;
+
+interface StableRequestId {
+  signature: string;
+  requestId: string;
+}
+
+interface SessionCreatePayload {
+  title: string;
+  organizer: string;
+  bankName: string;
+  bankAccount: string;
+  transferLink: string;
+  qrCodeUrl: string;
+  menuImages: string[];
+}
+
+interface PendingSessionRequest extends StableRequestId {
+  inputSignature: string;
+  payload: SessionCreatePayload;
+  closeRequestId: string;
+}
+
+function getStableRequestId(
+  requestRef: { current: StableRequestId | null },
+  signature: string
+) {
+  if (requestRef.current?.signature === signature) {
+    return requestRef.current.requestId;
+  }
+  const requestId = newRequestId();
+  requestRef.current = { signature, requestId };
+  return requestId;
+}
 
 export default function HomePage() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -34,6 +76,8 @@ export default function HomePage() {
   const [editingParsedIndex, setEditingParsedIndex] = useState<number | null>(null);
   const [aiParsing, setAiParsing] = useState(false);
   const [transcriptImages, setTranscriptImages] = useState<File[]>([]);
+  const sessionRequestRef = useRef<PendingSessionRequest | null>(null);
+  const batchRequestRef = useRef<StableRequestId | null>(null);
 
   const [fetchError, setFetchError] = useState(false);
 
@@ -54,11 +98,7 @@ export default function HomePage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchSessions();
-    const interval = setInterval(fetchSessions, 10000);
-    return () => clearInterval(interval);
-  }, [fetchSessions]);
+  usePolling(fetchSessions);
 
   const uploadFiles = async (files: File[]): Promise<string[]> => {
     if (files.length === 0) return [];
@@ -74,19 +114,85 @@ export default function HomePage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    const invalidIndex = parsedOrders.findIndex(
+      (order) =>
+        typeof order.name !== "string" ||
+        order.name.trim() === "" ||
+        order.name.trim().length > MAX_ORDER_TEXT_LENGTH ||
+        typeof order.item !== "string" ||
+        order.item.trim() === "" ||
+        order.item.trim().length > MAX_ORDER_TEXT_LENGTH ||
+        typeof order.price !== "number" ||
+        !Number.isFinite(order.price) ||
+        order.price <= 0 ||
+        typeof order.note !== "string" ||
+        order.note.trim().length > MAX_ORDER_NOTE_LENGTH
+    );
+    if (invalidIndex !== -1) {
+      setShowTranscript(true);
+      setEditingParsedIndex(invalidIndex);
+      alert(
+        `第 ${invalidIndex + 1} 筆訂單格式不正確：姓名、品項須在 ${MAX_ORDER_TEXT_LENGTH} 字內，備註須在 ${MAX_ORDER_NOTE_LENGTH} 字內，價格須大於 0`
+      );
+      return;
+    }
+    if (parsedOrders.length > MAX_BATCH_ORDERS) {
+      alert(
+        `一次最多匯入 ${MAX_BATCH_ORDERS} 筆訂單，請刪除部分訂單後再試`
+      );
+      return;
+    }
+
+    const ordersToImport = parsedOrders.map((order) => ({ ...order }));
+    const inputSignature = JSON.stringify({
+      form,
+      qrCodeFile: qrCodeFile
+        ? {
+            name: qrCodeFile.name,
+            size: qrCodeFile.size,
+            type: qrCodeFile.type,
+            lastModified: qrCodeFile.lastModified,
+          }
+        : null,
+      menuFiles: menuFiles.map((file) => ({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: file.lastModified,
+      })),
+    });
+
     setSubmitting(true);
     try {
-      let qrCodeUrl = "";
-      let menuImages: string[] = [];
+      let pendingSession = sessionRequestRef.current;
+      if (!pendingSession || pendingSession.inputSignature !== inputSignature) {
+        let qrCodeUrl = "";
+        let menuImages: string[] = [];
 
-      if (qrCodeFile) {
-        setUploadProgress("上傳 QR Code 中...");
-        const urls = await uploadFiles([qrCodeFile]);
-        qrCodeUrl = urls[0];
-      }
-      if (menuFiles.length > 0) {
-        setUploadProgress("上傳菜單圖片中...");
-        menuImages = await uploadFiles(menuFiles);
+        if (qrCodeFile) {
+          setUploadProgress("上傳 QR Code 中...");
+          const urls = await uploadFiles([qrCodeFile]);
+          qrCodeUrl = urls[0];
+        }
+        if (menuFiles.length > 0) {
+          setUploadProgress("上傳菜單圖片中...");
+          menuImages = await uploadFiles(menuFiles);
+        }
+
+        const payload: SessionCreatePayload = {
+          ...form,
+          qrCodeUrl,
+          menuImages,
+        };
+        const signature = JSON.stringify(payload);
+        pendingSession = {
+          inputSignature,
+          payload,
+          signature,
+          requestId: newRequestId(),
+          closeRequestId: newRequestId(),
+        };
+        sessionRequestRef.current = pendingSession;
       }
 
       setUploadProgress("建立場次中...");
@@ -94,36 +200,53 @@ export default function HomePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...form,
-          qrCodeUrl,
-          menuImages,
+          ...pendingSession.payload,
+          requestId: pendingSession.requestId,
         }),
       });
       if (res.ok) {
         const sessionData = await res.json();
 
         // 如果有預輸入訂單（轉錄或手動），批次匯入後直接關閉場次產生對帳清單
-        const validOrders = parsedOrders.filter(
-          (o) => o.name.trim() && o.item.trim() && o.price > 0
-        );
-        if (validOrders.length > 0 && sessionData.id) {
-          setUploadProgress(`匯入 ${validOrders.length} 筆訂單中...`);
+        if (ordersToImport.length > 0 && sessionData.id) {
+          setUploadProgress(`匯入 ${ordersToImport.length} 筆訂單中...`);
+          const batchPayload = {
+            sessionId: sessionData.id,
+            orders: ordersToImport,
+          };
+          const batchRequestId = getStableRequestId(
+            batchRequestRef,
+            JSON.stringify(batchPayload)
+          );
           const batchRes = await fetch("/api/orders/batch", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              sessionId: sessionData.id,
-              orders: validOrders,
+              ...batchPayload,
+              requestId: batchRequestId,
             }),
           });
           if (!batchRes.ok) {
-            alert("場次已建立，但訂單匯入失敗，請到場次頁重新匯入");
+            const data = await batchRes.json().catch(() => null);
+            alert(
+              data?.error
+                ? `場次已建立，但訂單匯入失敗：${data.error}`
+                : "場次已建立，但訂單匯入失敗，請重試"
+            );
+            return;
           } else {
             setUploadProgress("產生對帳清單中...");
             const closeRes = await fetch(`/api/sessions/${sessionData.id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ status: "已關閉" }),
+              body: JSON.stringify({
+                status: "已關閉",
+                expectedVersion:
+                  typeof sessionData.version === "string"
+                    ? sessionData.version
+                    : pendingSession.requestId,
+                requestId: pendingSession.closeRequestId,
+              }),
             });
             if (!closeRes.ok) {
               alert(
@@ -133,6 +256,8 @@ export default function HomePage() {
           }
         }
 
+        sessionRequestRef.current = null;
+        batchRequestRef.current = null;
         setForm({
           title: `${todayStr} `,
           organizer: "",
@@ -175,6 +300,12 @@ export default function HomePage() {
           {showForm ? "取消" : "開新訂單"}
         </button>
       </div>
+
+      {fetchError && sessions.length > 0 && (
+        <p className="mb-4 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-600">
+          最新資料載入失敗，畫面會自動重試
+        </p>
+      )}
 
       {showForm && (
         <form
@@ -409,40 +540,76 @@ export default function HomePage() {
                     onClick={async () => {
                       // 有圖片 → 直接走 AI
                       if (transcriptImages.length > 0) {
+                        const filesToParse = [...transcriptImages];
+                        const submittedText = transcriptText.trim();
+                        if (filesToParse.length > MAX_TRANSCRIPT_IMAGES) {
+                          setFailedLines([
+                            `一次最多解析 ${MAX_TRANSCRIPT_IMAGES} 張截圖，請移除部分圖片後再試`,
+                          ]);
+                          return;
+                        }
+                        const rawTotalBytes = filesToParse.reduce(
+                          (sum, file) => sum + file.size,
+                          0
+                        );
+                        if (rawTotalBytes > MAX_TRANSCRIPT_RAW_BYTES) {
+                          setFailedLines([
+                            "截圖原始檔總大小超過 30 MB，請一次少選幾張、分批解析",
+                          ]);
+                          return;
+                        }
+
                         setAiParsing(true);
                         setFailedLines([]);
                         try {
-                          const images = await Promise.all(
-                            transcriptImages.map(async (f) => {
-                              const { base64, mimeType } =
-                                await imageFileToBase64(f);
-                              return { data: base64, mimeType };
-                            })
-                          );
-                          // Vercel request body 上限 4.5MB，超過會直接 413
-                          const totalSize = images.reduce(
-                            (sum, img) => sum + img.data.length,
-                            0
-                          );
-                          if (totalSize > 3_500_000) {
-                            setFailedLines([
-                              "截圖總大小超過限制，請一次少選幾張、分批解析（解析結果會累加）",
-                            ]);
-                            setAiParsing(false);
-                            return;
+                          const images: { data: string; mimeType: string }[] = [];
+                          let payloadSize = 0;
+                          for (const file of filesToParse) {
+                            const { base64, mimeType } =
+                              await imageFileToBase64(file);
+                            payloadSize += base64.length;
+                            // Vercel request body 上限 4.5MB，預留 JSON 開銷
+                            if (
+                              payloadSize > MAX_AI_IMAGE_PAYLOAD_CHARS
+                            ) {
+                              setFailedLines([
+                                "截圖總大小超過限制，請一次少選幾張、分批解析（解析結果會累加）",
+                              ]);
+                              return;
+                            }
+                            images.push({ data: base64, mimeType });
                           }
+
                           const res = await fetch("/api/parse-ai", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                               images,
-                              text: transcriptText.trim() || undefined,
+                              text: submittedText || undefined,
                             }),
                           });
                           if (res.ok) {
                             const data = await res.json();
-                            setParsedOrders((prev) => [...prev, ...data.orders]);
-                            setTranscriptImages([]); // 避免再按一次重複匯入
+                            const orders = Array.isArray(data.orders)
+                              ? data.orders
+                              : [];
+                            if (orders.length === 0) {
+                              setFailedLines([
+                                "AI 沒有辨識到可匯入的訂單，截圖與文字已保留，請確認內容後再試",
+                              ]);
+                              return;
+                            }
+                            setParsedOrders((prev) => [...prev, ...orders]);
+                            setTranscriptImages((current) =>
+                              current.filter(
+                                (file) => !filesToParse.includes(file)
+                              )
+                            );
+                            if (submittedText) {
+                              setTranscriptText((current) =>
+                                current.trim() === submittedText ? "" : current
+                              );
+                            }
                           } else {
                             const data = await res.json().catch(() => null);
                             setFailedLines([
@@ -484,11 +651,21 @@ export default function HomePage() {
                         });
                         if (res.ok) {
                           const data = await res.json();
+                          const aiOrders = Array.isArray(data.orders)
+                            ? data.orders
+                            : [];
                           setParsedOrders((prev) => [
                             ...prev,
                             ...regexOrders,
-                            ...data.orders,
+                            ...aiOrders,
                           ]);
+                          if (aiOrders.length === 0) {
+                            setFailedLines([
+                              regexOrders.length > 0
+                                ? "AI 沒有辨識到其他可匯入的訂單，原有草稿與文字已保留，請確認內容後再試"
+                                : "AI 沒有辨識到可匯入的訂單，原有草稿與文字已保留，請確認內容後再試",
+                            ]);
+                          }
                         } else {
                           setParsedOrders((prev) => [...prev, ...regexOrders]);
                           setFailedLines(failed.length > 0 ? failed : [transcriptText]);

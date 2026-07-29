@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { appendRow } from "@/lib/sheets";
+import { optionalText, requiredText } from "@/lib/inputValidation";
 
 // 問題回報表 column layout:
-// [0]回報時間 [1]姓名 [2]類型 [3]描述 [4]截圖連結(逗號分隔)
+// [0]回報時間 [1]姓名 [2]類型 [3]描述 [4]截圖連結(逗號分隔) [5]回覆(人工填寫)
 
 async function sendNotificationEmail(
   name: string,
@@ -37,18 +38,23 @@ async function sendNotificationEmail(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const name = (body.name || "").trim();
-    const type = (body.type || "").trim();
-    const description = (body.description || "").trim();
+    const name = requiredText(body.name, 100);
+    const type = requiredText(body.type);
+    const description = requiredText(body.description, 5_000);
+    const imageUrls = optionalText(body.imageUrls, 10_000);
 
-    if (!name || !type || !description) {
+    if (
+      !name ||
+      !type ||
+      !["Bug 回報", "功能建議", "其他"].includes(type) ||
+      !description ||
+      imageUrls === null
+    ) {
       return NextResponse.json(
-        { error: "請填寫所有必填欄位" },
+        { error: "回報資料格式不正確" },
         { status: 400 }
       );
     }
-
-    const imageUrls = (body.imageUrls || "").trim();
 
     const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
     await appendRow("問題回報表", [now, name, type, description, imageUrls]);

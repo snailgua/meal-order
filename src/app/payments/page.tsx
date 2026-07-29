@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { Payment } from "@/types";
+import { newRequestId } from "@/lib/requestId";
+import { usePolling } from "@/lib/usePolling";
 
 interface ReceiverGroup {
   receiver: string;
@@ -10,6 +12,7 @@ interface ReceiverGroup {
   qrCodeUrl: string;
   transferLink: string;
   latestSessionId: string;
+  latestSessionVersion: string;
   latestDate: string;
   payments: Payment[];
   totalAmount: number;
@@ -24,7 +27,11 @@ export default function PaymentsPage() {
   const [fetchError, setFetchError] = useState(false);
   const [uploadingQrFor, setUploadingQrFor] = useState<string | null>(null);
   const qrInputRef = useRef<HTMLInputElement>(null);
-  const qrTargetRef = useRef<{ receiver: string; sessionId: string } | null>(null);
+  const qrTargetRef = useRef<{
+    receiver: string;
+    sessionId: string;
+    sessionVersion: string;
+  } | null>(null);
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -47,18 +54,11 @@ export default function PaymentsPage() {
   }, []);
 
   useEffect(() => {
-    // cleanup 會刪列造成 rowIndex 位移，先等它跑完再抓資料
-    (async () => {
-      try {
-        await fetch("/api/cleanup", { method: "POST" });
-      } catch {
-        // cleanup 失敗不影響顯示
-      }
-      fetchPayments();
-    })();
-    const interval = setInterval(fetchPayments, 10000);
-    return () => clearInterval(interval);
-  }, [fetchPayments]);
+    // 清理只會把 90 天前的已核銷列壓成不含付款個資的封存標記，
+    // 不刪實體列，也不會讓畫面上的 rowIndex 位移。
+    void fetch("/api/cleanup", { method: "POST" }).catch(() => undefined);
+  }, []);
+  usePolling(fetchPayments);
 
   const groups: ReceiverGroup[] = useMemo(() => {
     const grouped: Record<string, Payment[]> = {};
@@ -103,6 +103,7 @@ export default function PaymentsPage() {
           qrCodeUrl: latest?.qrCodeUrl || "",
           transferLink: latest?.transferLink || "",
           latestSessionId: latest?.sessionId || "",
+          latestSessionVersion: latest?.sessionVersion || "",
           latestDate: latest?.sessionDate || "",
           payments: items,
           totalAmount: items.reduce((sum, p) => sum + p.amount, 0),
@@ -112,18 +113,25 @@ export default function PaymentsPage() {
       .sort((a, b) => b.latestDate.localeCompare(a.latestDate));
   }, [payments]);
 
-  const handleUpdateQr = (receiver: string, sessionId: string) => {
+  const handleUpdateQr = (
+    receiver: string,
+    sessionId: string,
+    sessionVersion: string
+  ) => {
     if (!sessionId) return;
-    qrTargetRef.current = { receiver, sessionId };
+    qrTargetRef.current = { receiver, sessionId, sessionVersion };
     qrInputRef.current?.click();
   };
 
   const handleAction = async (
     payment: Payment,
-    action: "payerConfirm" | "receiverConfirm"
+    action: "payerConfirm" | "receiverConfirm" | "payerUndo"
   ) => {
     if (action === "receiverConfirm") {
       if (!confirm("這個按鍵只有開團的人可以點喔！\n確定要確認收到嗎？"))
+        return;
+    } else if (action === "payerUndo") {
+      if (!confirm(`要取消${payment.payer}的「我已轉帳」標記嗎？\n（按錯時才需要取消）`))
         return;
     } else {
       if (!confirm(`你是${payment.payer}嗎？\n確認已經付錢了嗎？`)) return;
@@ -142,8 +150,10 @@ export default function PaymentsPage() {
             orderId: payment.orderId || undefined,
             sessionId: payment.sessionId,
             payer: payment.payer,
+            receiver: payment.receiver,
             amount: payment.amount,
             item: payment.item,
+            note: payment.note,
           },
         }),
       });
@@ -241,7 +251,13 @@ export default function PaymentsPage() {
                   )}
                   {group.latestSessionId && (
                     <button
-                      onClick={() => handleUpdateQr(group.receiver, group.latestSessionId)}
+                      onClick={() =>
+                        handleUpdateQr(
+                          group.receiver,
+                          group.latestSessionId,
+                          group.latestSessionVersion
+                        )
+                      }
                       disabled={uploadingQrFor === group.receiver}
                       className="bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-xl text-xs font-medium active:bg-emerald-200 disabled:opacity-50"
                     >
@@ -296,9 +312,14 @@ export default function PaymentsPage() {
                                       </p>
                                     )}
                                     <p className="text-xs text-stone-400 mt-0.5">
-                                      {p.sessionTitle}
+                                      {p.sessionTitle || "（場次資料已遺失）"}
                                       {p.sessionDate && ` (${p.sessionDate})`}
                                     </p>
+                                    {p.sessionOpen && (
+                                      <p className="text-xs text-amber-600 mt-0.5">
+                                        此場次已重新開放訂餐，金額可能還會變動
+                                      </p>
+                                    )}
                                     {p.payerConfirmed &&
                                       !p.receiverConfirmed &&
                                       p.payerConfirmedAt && (
@@ -319,6 +340,15 @@ export default function PaymentsPage() {
                                       className="flex-1 bg-emerald-600 text-white py-1.5 rounded-xl text-xs font-medium active:bg-emerald-700 disabled:opacity-50"
                                     >
                                       {isLoading ? "處理中..." : "我已轉帳"}
+                                    </button>
+                                  )}
+                                  {p.payerConfirmed && !p.receiverConfirmed && (
+                                    <button
+                                      onClick={() => handleAction(p, "payerUndo")}
+                                      disabled={isLoading}
+                                      className="bg-stone-100 text-stone-500 px-3 py-1.5 rounded-xl text-xs font-medium active:bg-stone-200 disabled:opacity-50 shrink-0"
+                                    >
+                                      按錯了
                                     </button>
                                   )}
                                   {!p.receiverConfirmed && (
@@ -371,7 +401,11 @@ export default function PaymentsPage() {
             const patchRes = await fetch(`/api/sessions/${target.sessionId}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ qrCodeUrl: urls[0] }),
+              body: JSON.stringify({
+                qrCodeUrl: urls[0],
+                expectedVersion: target.sessionVersion,
+                requestId: newRequestId(),
+              }),
             });
             if (!patchRes.ok) throw new Error("patch failed");
             await fetchPayments();
