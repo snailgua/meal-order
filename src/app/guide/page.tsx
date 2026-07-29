@@ -5,7 +5,7 @@ export default function GuidePage() {
       <div className="text-center">
         <h1 className="text-2xl font-bold tracking-tight">怎麼用？</h1>
         <p className="text-stone-400 text-sm mt-1">
-          第一次來？花 2 分鐘看完就上手！
+          花 1 分鐘看完就上手！
         </p>
       </div>
 
@@ -15,138 +15,86 @@ export default function GuidePage() {
           <span className="mr-2">&#x1F35C;</span>這是什麼？
         </h2>
         <p className="text-sm text-stone-600 leading-relaxed">
-          這是我們部門專屬的<strong>團體訂餐 & 付款追蹤</strong>工具！
+          這是我們部門專屬的<strong>對帳工具</strong>！
           <br />
-          團主開一張訂單，大家填餐點，系統自動統計品項和金額，還能追蹤誰付了錢、誰還沒付。
+          點餐照舊在 LINE 接龍，訂完之後團主把接龍內容丟進來，系統就會自動算好
+          <strong>誰欠團主多少錢</strong>，大家轉帳、核銷一目瞭然，不再漏帳。
         </p>
       </div>
 
-      {/* ② 兩種角色 */}
-      <div className="bg-white rounded-2xl shadow-sm p-5">
-        <h2 className="font-semibold text-lg mb-3">
-          <span className="mr-2">&#x1F465;</span>兩種角色
-        </h2>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-emerald-50 rounded-xl p-4 text-center">
-            <div className="text-3xl mb-2">&#x1F451;</div>
-            <p className="font-semibold text-emerald-700 text-sm">團主</p>
-            <p className="text-xs text-emerald-600 mt-1 leading-relaxed">
-              開訂單、統計品項
-              <br />
-              收錢、核銷帳務
-            </p>
-          </div>
-          <div className="bg-amber-50 rounded-xl p-4 text-center">
-            <div className="text-3xl mb-2">&#x1F37D;&#xFE0F;</div>
-            <p className="font-semibold text-amber-700 text-sm">訂餐的人</p>
-            <p className="text-xs text-amber-600 mt-1 leading-relaxed">
-              填寫餐點、付錢
-              <br />
-              標記已轉帳
-            </p>
-          </div>
-        </div>
-        <p className="text-xs text-stone-400 mt-3 text-center">
-          任何人都可以當團主，每次由一位自願者負責就好～
-        </p>
-      </div>
-
-      {/* ③ 訂餐流程 */}
+      {/* ② 團主怎麼用 */}
       <div className="bg-white rounded-2xl shadow-sm p-5">
         <h2 className="font-semibold text-lg mb-4">
-          <span className="mr-2">&#x1F4CB;</span>訂餐流程
+          <span className="mr-2">&#x1F451;</span>團主：3 步驟建好帳單
         </h2>
         <div className="space-y-0">
           <Step
             number={1}
             emoji="&#x1F4E2;"
-            title="團主開單"
-            desc="按「開新訂單」，填寫標題、銀行收款資訊（可上傳 QR Code）、上傳菜單圖片"
+            title="開新訂單"
+            desc="在「今日訂餐」按「開新訂單」，填標題和收款帳戶（可上傳 QR Code）"
           />
           <StepArrow />
           <Step
             number={2}
             emoji="&#x1F4E5;"
-            title="預先輸入訂單（選填）"
-            desc="團主可以先幫大家輸入訂單：用「轉錄匯入」貼上文字或上傳截圖（AI 自動辨識），或按「手動新增」一筆一筆輸入"
+            title="把 LINE 接龍丟進來"
+            desc="直接貼上接龍文字或上傳截圖，AI 自動辨識成訂單，可逐筆修改；也可以手動一筆筆輸入"
           />
           <StepArrow />
           <Step
             number={3}
-            emoji="&#x1F517;"
-            title="分享連結"
-            desc="把場次連結分享到群組，大家可以看菜單圖片、點進去填餐"
-          />
-          <StepArrow />
-          <Step
-            number={4}
-            emoji="&#x270F;&#xFE0F;"
-            title="大家填餐"
-            desc="輸入名字、品項、價格，按送出訂單（場次頁也可以再轉錄匯入或上傳截圖）"
-          />
-          <StepArrow />
-          <Step
-            number={5}
-            emoji="&#x1F512;"
-            title="團主關閉訂餐"
-            desc="收集完畢後按「關閉訂餐」，系統自動統計"
-          />
-          <StepArrow />
-          <Step
-            number={6}
-            emoji="&#x1F4CB;"
-            title="複製摘要去訂餐"
-            desc="按「複製摘要」，可以直接複製內容方便貼給店家的 LINE"
+            emoji="&#x2728;"
+            title="按「建立場次」就完成"
+            desc="系統自動產生對帳清單，把「付款追蹤」頁分享到群組，等大家轉帳就好"
             isLast
           />
         </div>
-        <div className="bg-stone-50 rounded-xl p-3 mt-3 space-y-1.5">
-          <p className="text-xs font-medium text-stone-500">轉錄匯入支援的方式：</p>
-          <p className="text-xs text-stone-400">&#x2022; <strong className="text-stone-500">貼上文字</strong>：接龍、「你訂」、餐盒平台等各種格式都可以</p>
-          <p className="text-xs text-stone-400">&#x2022; <strong className="text-stone-500">上傳截圖</strong>：直接拍 LINE 接龍或菜單截圖，AI 自動辨識</p>
-          <p className="text-xs text-stone-400">&#x2022; <strong className="text-stone-500">AI 智慧辨識</strong>：看不懂的格式會自動用 AI 解析，不用擔心格式問題！</p>
-          <p className="text-xs text-stone-400">&#x2022; 解析後可逐筆修改再匯入</p>
-        </div>
         <p className="text-xs text-stone-400 mt-3 text-center">
-          標題、負責人、收款帳戶、QR Code、菜單圖片都可以隨時點「編輯」修改～
+          收款帳戶、QR Code 之後都可以隨時修改～
         </p>
       </div>
 
-      {/* ④ 付款流程 */}
+      {/* ③ 大家怎麼付錢 */}
       <div className="bg-white rounded-2xl shadow-sm p-5">
         <h2 className="font-semibold text-lg mb-4">
-          <span className="mr-2">&#x1F4B0;</span>付款流程
+          <span className="mr-2">&#x1F4B0;</span>大家：3 步驟還錢
         </h2>
         <div className="space-y-0">
           <Step
             number={1}
             emoji="&#x1F4F1;"
-            title="查看要付多少"
-            desc="到「付款追蹤」頁，看自己欠誰多少錢"
+            title="看自己欠多少"
+            desc="到「付款追蹤」頁找自己的名字，看要付誰、付多少"
           />
           <StepArrow />
           <Step
             number={2}
             emoji="&#x1F3E6;"
-            title="轉帳給團主"
-            desc="用銀行帳號、QR Code 或轉帳連結付款（可點「複製帳號」一鍵複製）"
+            title="轉帳"
+            desc="掃 QR Code 或按「複製帳號」轉帳給團主"
           />
           <StepArrow />
           <Step
             number={3}
             emoji="&#x2705;"
             title="按「我已轉帳」"
-            desc="轉完帳後記得回來按一下，讓團主知道（團主也可以直接確認收到）"
-          />
-          <StepArrow />
-          <Step
-            number={4}
-            emoji="&#x1F389;"
-            title="團主按「確認收到」"
-            desc="團主確認收到錢後按一下，帳務就核銷完成啦！"
+            desc="轉完記得按一下；團主確認收到後，這筆帳就核銷消失啦！"
             isLast
           />
         </div>
+      </div>
+
+      {/* ④ 信任制提醒 */}
+      <div className="bg-amber-50 rounded-2xl shadow-sm p-5">
+        <h2 className="font-semibold text-lg mb-2 text-amber-700">
+          <span className="mr-2">&#x1F91D;</span>信任制小提醒
+        </h2>
+        <p className="text-sm text-amber-600 leading-relaxed">
+          這個 app <strong>沒有登入系統</strong>，靠的是大家的信任運作～
+          <br />
+          「我已轉帳」「確認收到」只按自己該按的那顆，按錯了帳就亂了哦！
+        </p>
       </div>
 
       {/* ⑤ 資料存放 */}
@@ -155,9 +103,8 @@ export default function GuidePage() {
           <span className="mr-2">&#x1F4CA;</span>資料都存在哪裡？
         </h2>
         <p className="text-sm text-stone-600 leading-relaxed">
-          所有訂餐紀錄、付款狀態都存在 Google Sheet 上，公開透明！
-          <br />
-          核銷完成的帳務也會<strong>保留三個月</strong>，有疑問隨時可以回去查。
+          所有紀錄都存在 Google Sheet 上，公開透明！核銷完的帳也會
+          <strong>保留三個月</strong>，有疑問隨時回去查。
         </p>
         <a
           href="https://docs.google.com/spreadsheets/d/1IvKJrHkftAQ9Iyaf9p4iQ82GruIA_JHoWcIPKIR9TzU/edit?usp=sharing"
@@ -176,30 +123,8 @@ export default function GuidePage() {
           <span className="mr-2">&#x1F4E3;</span>遇到問題？
         </h2>
         <p className="text-sm text-stone-600 leading-relaxed">
-          到「回報問題」分頁，選擇問題類型、描述狀況，還可以
-          <strong>上傳截圖</strong>
-          幫助我更快找到問題！
+          到「回報問題」分頁描述狀況（可以附截圖），我會盡快處理！
         </p>
-      </div>
-
-      {/* ⑦ 信任制提醒 */}
-      <div className="bg-amber-50 rounded-2xl shadow-sm p-5">
-        <h2 className="font-semibold text-lg mb-2 text-amber-700">
-          <span className="mr-2">&#x1F91D;</span>信任制小提醒
-        </h2>
-        <p className="text-sm text-amber-600 leading-relaxed">
-          這個 app
-          <strong>沒有登入系統</strong>
-          ，靠的是大家的信任運作～
-        </p>
-        <ul className="mt-2 space-y-1.5 text-sm text-amber-600">
-          <li>&#x1F6AB; 不要幫別人按「我已轉帳」</li>
-          <li>&#x1F6AB; 不要幫別人按「確認收到」</li>
-          <li>&#x1F6AB; 不是團主的話，不要亂按「關閉訂餐」</li>
-          <li>
-            &#x1F49B; 每個按鈕都有提醒，看到提醒記得確認是不是該你按的哦！
-          </li>
-        </ul>
       </div>
     </div>
   );
