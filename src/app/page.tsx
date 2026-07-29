@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { Session } from "@/types";
 import { parseTranscriptText, type ParsedOrder } from "@/lib/parseTranscript";
+import { imageFileToBase64 } from "@/lib/compressImage";
 
 export default function HomePage() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -95,7 +96,7 @@ export default function HomePage() {
       if (res.ok) {
         const sessionData = await res.json();
 
-        // 如果有預輸入訂單（轉錄或手動），批次匯入
+        // 如果有預輸入訂單（轉錄或手動），批次匯入後直接關閉場次產生對帳清單
         const validOrders = parsedOrders.filter(
           (o) => o.name.trim() && o.item.trim() && o.price > 0
         );
@@ -111,6 +112,18 @@ export default function HomePage() {
           });
           if (!batchRes.ok) {
             alert("場次已建立，但訂單匯入失敗，請到場次頁重新匯入");
+          } else {
+            setUploadProgress("產生對帳清單中...");
+            const closeRes = await fetch(`/api/sessions/${sessionData.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: "已關閉" }),
+            });
+            if (!closeRes.ok) {
+              alert(
+                "場次已建立，但自動關閉失敗，請到場次頁按「關閉訂餐」產生對帳清單"
+              );
+            }
           }
         }
 
@@ -373,19 +386,14 @@ export default function HomePage() {
                         setAiParsing(true);
                         setFailedLines([]);
                         try {
-                          const buffer = await transcriptImage.arrayBuffer();
-                          const base64 = btoa(
-                            new Uint8Array(buffer).reduce(
-                              (data, byte) => data + String.fromCharCode(byte),
-                              ""
-                            )
-                          );
+                          const { base64, mimeType } =
+                            await imageFileToBase64(transcriptImage);
                           const res = await fetch("/api/parse-ai", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                               image: base64,
-                              mimeType: transcriptImage.type,
+                              mimeType,
                               text: transcriptText.trim() || undefined,
                             }),
                           });
@@ -393,7 +401,12 @@ export default function HomePage() {
                             const data = await res.json();
                             setParsedOrders((prev) => [...prev, ...data.orders]);
                           } else {
-                            setFailedLines(["截圖辨識失敗，請改用文字貼上或手動新增"]);
+                            const data = await res.json().catch(() => null);
+                            setFailedLines([
+                              data?.error
+                                ? `截圖辨識失敗：${data.error}`
+                                : `截圖辨識失敗（HTTP ${res.status}），請改用文字貼上或手動新增`,
+                            ]);
                           }
                         } catch {
                           setFailedLines(["截圖辨識失敗，請改用文字貼上或手動新增"]);
@@ -601,6 +614,13 @@ export default function HomePage() {
                 : "建立場次";
             })()}
           </button>
+          {parsedOrders.some(
+            (o) => o.name.trim() && o.item.trim() && o.price > 0
+          ) && (
+            <p className="text-xs text-stone-400 text-center -mt-2">
+              建立後會直接關閉場次並產生對帳清單；如需讓大家線上加點，可到場次頁按「重新開放訂餐」
+            </p>
+          )}
         </form>
       )}
 
