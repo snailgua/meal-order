@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, use, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { Order } from "@/types";
 import { parseTranscriptText } from "@/lib/parseTranscript";
+import { imageFileToBase64 } from "@/lib/compressImage";
 
 interface SessionDetail {
   id: string;
@@ -333,19 +334,13 @@ export default function SessionPage({
       setAiParsing(true);
       setFailedLines([]);
       try {
-        const buffer = await transcriptImage.arrayBuffer();
-        const base64 = btoa(
-          new Uint8Array(buffer).reduce(
-            (data, byte) => data + String.fromCharCode(byte),
-            ""
-          )
-        );
+        const { base64, mimeType } = await imageFileToBase64(transcriptImage);
         const res = await fetch("/api/parse-ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             image: base64,
-            mimeType: transcriptImage.type,
+            mimeType,
             text: transcriptText.trim() || undefined,
           }),
         });
@@ -353,7 +348,12 @@ export default function SessionPage({
           const data = await res.json();
           setParsedOrders(data.orders);
         } else {
-          setFailedLines(["截圖辨識失敗，請改用文字貼上或手動新增"]);
+          const data = await res.json().catch(() => null);
+          setFailedLines([
+            data?.error
+              ? `截圖辨識失敗：${data.error}`
+              : `截圖辨識失敗（HTTP ${res.status}），請改用文字貼上或手動新增`,
+          ]);
         }
       } catch {
         setFailedLines(["截圖辨識失敗，請改用文字貼上或手動新增"]);

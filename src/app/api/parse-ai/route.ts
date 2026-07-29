@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 
+// Gemini 解析大截圖可能超過 Vercel 預設的 function timeout
+export const maxDuration = 60;
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 const SYSTEM_PROMPT = `你是一個訂餐文字解析器。請把訂餐內容解析成 JSON 陣列。
