@@ -53,6 +53,26 @@ export async function updateRow(
   });
 }
 
+// 只寫入指定的儲存格（col 為 0-based 欄位索引）。
+// 兩人同時操作同一列時，整列覆寫會互相蓋掉對方的欄位，單格寫入不會。
+export async function updateCells(
+  sheetName: string,
+  rowNumber: number,
+  updates: { col: number; value: string }[]
+) {
+  if (updates.length === 0) return;
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      valueInputOption: "RAW",
+      data: updates.map((u) => ({
+        range: `${sheetName}!${String.fromCharCode(65 + u.col)}${rowNumber}`,
+        values: [[u.value]],
+      })),
+    },
+  });
+}
+
 export async function deleteRow(sheetName: string, rowNumber: number) {
   const spreadsheet = await sheets.spreadsheets.get({
     spreadsheetId: SPREADSHEET_ID,

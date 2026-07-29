@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getRows, updateRow, appendRows, deleteRow } from "@/lib/sheets";
+import { getRows, updateRow, deleteRow } from "@/lib/sheets";
+import { reconcilePayments } from "@/lib/reconcilePayments";
 
 // 訂單明細表 column layout:
 // [0]場次ID [1]日期 [2]標題 [3]負責人姓名 [4]姓名 [5]品項名稱 [6]價格 [7]備註 [8]建立時間 [9]最後修改時間
@@ -118,62 +119,21 @@ export async function PATCH(
         }
 
         await Promise.all([...orderUpdates, ...paymentUpdates]);
+
+        // 更改團主會動到「誰欠誰」：新團主自己的訂單不再需要付款、
+        // 舊團主的訂單反而要付給新團主。已關閉場次補跑 reconcile 修正
+        if (body.organizer && row[8] === "已關閉") {
+          await reconcilePayments(id, row);
+        }
       }
 
       return NextResponse.json({ success: true });
     }
 
     if (body.status === "已關閉") {
-      // 冪等關閉：先補齊付款紀錄、最後才改狀態。
-      // 順序反過來的話，付款建立失敗會留下「已關閉但沒帳」且無法重試的狀態；
-      // 補齊時比對既有付款列去重，重新開放後再關閉（或重複請求）不會產生重複欠款。
-      const [orderRows, existingPaymentRows] = await Promise.all([
-        getRows("訂單明細表"),
-        getRows("付款追蹤表"),
-      ]);
-      const orders = orderRows.slice(1).filter((r) => r[0] === id);
-      const organizer = row[3];
-
-      const paymentKey = (
-        payer: string,
-        item: string,
-        amount: string,
-        note: string
-      ) => `${payer}|${item}|${Number(amount)}|${note || ""}`;
-
-      // 同場次既有付款列（含已核銷）各 key 的數量
-      const existing = new Map<string, number>();
-      for (const r of existingPaymentRows.slice(1)) {
-        if (r[0] !== id) continue;
-        const k = paymentKey(r[3], r[6], r[5], r[7]);
-        existing.set(k, (existing.get(k) || 0) + 1);
-      }
-
-      const paymentRows: string[][] = [];
-      for (const o of orders) {
-        if (o[4] === organizer) continue; // 團主自己的訂單不用付
-        const k = paymentKey(o[4], o[5], o[6], o[7]);
-        const count = existing.get(k) || 0;
-        if (count > 0) {
-          existing.set(k, count - 1);
-          continue;
-        }
-        paymentRows.push([
-          id,
-          row[1], // 日期
-          row[2], // 標題
-          o[4], // 付款人姓名
-          organizer, // 收款人姓名
-          o[6], // 金額
-          o[5], // 品項名稱
-          o[7] || "", // 備註
-          "FALSE",
-          "FALSE",
-          "",
-        ]);
-      }
-
-      await appendRows("付款追蹤表", paymentRows);
+      // 冪等關閉：先對帳（reconcile 以訂單ID去重補建）、最後才改狀態。
+      // 順序反過來的話，付款建立失敗會留下「已關閉但沒帳」且無法重試的狀態。
+      await reconcilePayments(id, row);
 
       if (row[8] !== "已關閉") {
         row[8] = "已關閉";

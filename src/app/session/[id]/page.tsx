@@ -38,7 +38,10 @@ export default function SessionPage({
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
+  // 編輯中的訂單存「開始編輯當下的快照」：輪詢會刷新 orders，
+  // 若只存 rowIndex、送出時再回查，可能拿到位移後的另一筆訂單
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [statusChanging, setStatusChanging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -215,22 +218,22 @@ export default function SessionPage({
 
   const handleEditOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingRowIndex) return;
+    if (!editingOrder) return;
     setSubmitting(true);
     try {
-      const editingOrder = orders.find((o) => o.rowIndex === editingRowIndex);
       const res = await fetch("/api/orders", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          rowIndex: editingRowIndex,
+          orderId: editingOrder.id || undefined,
+          rowIndex: editingOrder.rowIndex,
           sessionId: id,
           name: editForm.name,
           item: editForm.item,
           price: Number(editForm.price),
           note: editForm.note,
-          createdAt: editingOrder?.createdAt,
-          original: editingOrder && {
+          createdAt: editingOrder.createdAt,
+          original: {
             name: editingOrder.name,
             item: editingOrder.item,
             price: editingOrder.price,
@@ -239,13 +242,13 @@ export default function SessionPage({
         }),
       });
       if (res.ok) {
-        setEditingRowIndex(null);
+        setEditingOrder(null);
         fetchData();
       } else {
         const data = await res.json();
         alert(data.error || "更新失敗");
         if (res.status === 409) {
-          setEditingRowIndex(null);
+          setEditingOrder(null);
           fetchData();
         }
       }
@@ -260,6 +263,7 @@ export default function SessionPage({
     if (!confirm("確定要刪除此訂單？")) return;
     try {
       const params = new URLSearchParams({
+        orderId: order.id || "",
         rowIndex: String(order.rowIndex),
         sessionId: order.sessionId,
         name: order.name,
@@ -283,7 +287,9 @@ export default function SessionPage({
   };
 
   const handleCloseSession = async () => {
+    if (statusChanging) return;
     if (!confirm("你是團主嗎？團主才能按關閉訂單哦～請不要亂按關閉訂單。\n\n確定要關閉訂餐？關閉後將無法新增訂單。")) return;
+    setStatusChanging(true);
     try {
       const res = await fetch(`/api/sessions/${id}`, {
         method: "PATCH",
@@ -291,18 +297,22 @@ export default function SessionPage({
         body: JSON.stringify({ status: "已關閉" }),
       });
       if (res.ok) {
-        fetchData();
+        await fetchData();
       } else {
         const data = await res.json();
         alert(data.error || "關閉失敗");
       }
     } catch {
       alert("網路錯誤，請稍後再試");
+    } finally {
+      setStatusChanging(false);
     }
   };
 
   const handleReopenSession = async () => {
+    if (statusChanging) return;
     if (!confirm("這個按鍵只有團主才能按喔！\n不然開了也沒人處理喲～\n\n確定要重新開放訂餐嗎？")) return;
+    setStatusChanging(true);
     try {
       const res = await fetch(`/api/sessions/${id}`, {
         method: "PATCH",
@@ -310,13 +320,15 @@ export default function SessionPage({
         body: JSON.stringify({ status: "開放中" }),
       });
       if (res.ok) {
-        fetchData();
+        await fetchData();
       } else {
         const data = await res.json();
         alert(data.error || "重新開放失敗");
       }
     } catch {
       alert("網路錯誤，請稍後再試");
+    } finally {
+      setStatusChanging(false);
     }
   };
 
@@ -342,7 +354,7 @@ export default function SessionPage({
   };
 
   const startEdit = (order: Order) => {
-    setEditingRowIndex(order.rowIndex);
+    setEditingOrder(order);
     setEditForm({
       name: order.name,
       item: order.item,
@@ -363,6 +375,15 @@ export default function SessionPage({
             return { data: base64, mimeType };
           })
         );
+        // Vercel request body 上限 4.5MB，超過會直接 413
+        const totalSize = images.reduce((sum, img) => sum + img.data.length, 0);
+        if (totalSize > 3_500_000) {
+          setFailedLines([
+            "截圖總大小超過限制，請一次少選幾張、分批解析（解析結果會累加）",
+          ]);
+          setAiParsing(false);
+          return;
+        }
         const res = await fetch("/api/parse-ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -373,7 +394,7 @@ export default function SessionPage({
         });
         if (res.ok) {
           const data = await res.json();
-          setParsedOrders(data.orders);
+          setParsedOrders((prev) => [...prev, ...data.orders]); // 分批解析累加
           setTranscriptImages([]); // 避免再按一次重複匯入
         } else {
           const data = await res.json().catch(() => null);
@@ -468,7 +489,7 @@ export default function SessionPage({
   if (!session) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-12 text-center text-stone-400">
-        找不到此場次
+        {fetchError ? "載入失敗，請稍後重新整理" : "找不到此場次"}
       </div>
     );
   }
@@ -485,7 +506,7 @@ export default function SessionPage({
         >
           &larr; 返回
         </button>
-        {lastUpdated && (
+        {(lastUpdated || fetchError) && (
           <span className="text-xs text-stone-400">
             {fetchError ? "更新失敗，重試中..." : `更新於 ${lastUpdated}`}
           </span>
@@ -1169,7 +1190,10 @@ export default function SessionPage({
         ) : (
           <div className="divide-y divide-stone-100">
             {orders.map((order) =>
-              editingRowIndex === order.rowIndex ? (
+              editingOrder &&
+              (editingOrder.id
+                ? editingOrder.id === order.id
+                : editingOrder.rowIndex === order.rowIndex) ? (
                 <form
                   key={order.rowIndex}
                   onSubmit={handleEditOrder}
@@ -1225,7 +1249,7 @@ export default function SessionPage({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setEditingRowIndex(null)}
+                      onClick={() => setEditingOrder(null)}
                       className="flex-1 border border-stone-200 py-2 rounded-xl text-sm font-medium text-stone-500"
                     >
                       取消
@@ -1329,16 +1353,18 @@ export default function SessionPage({
       {isOpen ? (
         <button
           onClick={handleCloseSession}
-          className="w-full bg-rose-500 text-white py-3 rounded-2xl font-medium active:bg-rose-600 shadow-sm"
+          disabled={statusChanging}
+          className="w-full bg-rose-500 text-white py-3 rounded-2xl font-medium active:bg-rose-600 shadow-sm disabled:opacity-50"
         >
-          關閉訂餐
+          {statusChanging ? "處理中..." : "關閉訂餐"}
         </button>
       ) : (
         <button
           onClick={handleReopenSession}
-          className="w-full bg-amber-500 text-white py-3 rounded-2xl font-medium active:bg-amber-600 shadow-sm"
+          disabled={statusChanging}
+          className="w-full bg-amber-500 text-white py-3 rounded-2xl font-medium active:bg-amber-600 shadow-sm disabled:opacity-50"
         >
-          重新開放訂餐
+          {statusChanging ? "處理中..." : "重新開放訂餐"}
         </button>
       )}
 

@@ -137,8 +137,9 @@ export default function PaymentsPage() {
         body: JSON.stringify({
           rowIndex: payment.rowIndex,
           action,
-          // 帳款內容給後端驗證 rowIndex 沒被其他人的刪列位移
+          // 優先用訂單ID定位；舊資料退回內容驗證，避免刪列位移操作到別筆
           expected: {
+            orderId: payment.orderId || undefined,
             sessionId: payment.sessionId,
             payer: payment.payer,
             amount: payment.amount,
@@ -172,7 +173,7 @@ export default function PaymentsPage() {
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold tracking-tight">付款追蹤</h1>
-        {lastUpdated && (
+        {(lastUpdated || fetchError) && (
           <span className="text-xs text-stone-400">
             {fetchError ? "更新失敗，重試中..." : `更新於 ${lastUpdated}`}
           </span>
@@ -181,7 +182,9 @@ export default function PaymentsPage() {
 
       {groups.length === 0 ? (
         <p className="text-center text-stone-400 py-12">
-          目前沒有未付款的帳款
+          {fetchError && !lastUpdated
+            ? "載入失敗，請稍後重新整理"
+            : "目前沒有未付款的帳款"}
         </p>
       ) : (
         <div className="space-y-5">

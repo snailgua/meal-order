@@ -15,6 +15,8 @@ export interface Session {
 
 export interface Order {
   rowIndex: number;
+  /** 不可變訂單ID（舊資料可能為空字串） */
+  id: string;
   sessionId: string;
   name: string;
   item: string;
@@ -26,6 +28,8 @@ export interface Order {
 
 export interface Payment {
   rowIndex: number;
+  /** 來源訂單ID（舊資料可能為空字串） */
+  orderId: string;
   sessionId: string;
   payer: string;
   receiver: string;

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getRows, updateRow } from "@/lib/sheets";
+import { getRows, updateCells } from "@/lib/sheets";
 
 // 付款追蹤表 column layout:
 // [0]場次ID [1]日期 [2]標題 [3]付款人姓名 [4]收款人姓名 [5]金額
 // [6]品項名稱 [7]備註 [8]付款人是否標記已付 [9]收款人是否確認收到 [10]核銷時間
-// [11]付款人標記時間
+// [11]付款人標記時間 [12]訂單ID
 
 export async function GET() {
   try {
@@ -51,6 +51,7 @@ export async function GET() {
 
         return {
           rowIndex: index + 2,
+          orderId: row[12] || "",
           sessionId,
           payer: row[3],
           receiver: row[4],
@@ -90,9 +91,26 @@ export async function PATCH(request: Request) {
     const rows = await getRows("付款追蹤表");
 
     // rowIndex 是客戶端讀取當下的列號，別人刪列（如 cleanup、刪訂單）後會位移。
-    // 用 expected 內容驗證，不符就重新定位，避免確認到別人的帳款。
-    let targetRow = rowIndex;
-    if (expected) {
+    // 優先用不可變的訂單ID定位；沒有 ID 的舊資料用 expected 內容驗證/重新定位。
+    let targetRow = 0;
+    if (expected?.orderId) {
+      for (let i = 1; i < rows.length; i++) {
+        if (
+          rows[i][0] === expected.sessionId &&
+          rows[i][12] === expected.orderId &&
+          !rows[i][10]
+        ) {
+          targetRow = i + 1;
+          break;
+        }
+      }
+      if (!targetRow) {
+        return NextResponse.json(
+          { error: "這筆帳款已變動或已核銷，請重新整理後再試" },
+          { status: 409 }
+        );
+      }
+    } else if (expected) {
       const matches = (r: string[] | undefined) =>
         !!r &&
         r[0] === expected.sessionId &&
@@ -101,8 +119,9 @@ export async function PATCH(request: Request) {
         (r[6] || "") === (expected.item || "") &&
         !r[10]; // 未核銷
 
-      if (!matches(rows[rowIndex - 1])) {
-        targetRow = 0;
+      if (matches(rows[rowIndex - 1])) {
+        targetRow = rowIndex;
+      } else {
         for (let i = 1; i < rows.length; i++) {
           if (matches(rows[i])) {
             targetRow = i + 1;
@@ -116,6 +135,8 @@ export async function PATCH(request: Request) {
           );
         }
       }
+    } else {
+      targetRow = rowIndex;
     }
 
     const row = rows[targetRow - 1];
@@ -124,6 +145,9 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "找不到此筆帳款" }, { status: 404 });
     }
 
+    // 只寫入各動作自己的欄位：付款人與收款人同時按時，
+    // 整列覆寫會用舊 snapshot 蓋掉對方剛寫入的確認狀態
+    const nowIso = new Date().toISOString();
     if (action === "payerConfirm") {
       if (row[8] === "TRUE") {
         return NextResponse.json(
@@ -131,11 +155,14 @@ export async function PATCH(request: Request) {
           { status: 400 }
         );
       }
-      row[8] = "TRUE";
-      row[11] = new Date().toISOString();
+      const updates = [
+        { col: 8, value: "TRUE" },
+        { col: 11, value: nowIso },
+      ];
       if (row[9] === "TRUE") {
-        row[10] = new Date().toISOString();
+        updates.push({ col: 10, value: nowIso });
       }
+      await updateCells("付款追蹤表", targetRow, updates);
     } else if (action === "receiverConfirm") {
       if (row[9] === "TRUE") {
         return NextResponse.json(
@@ -144,19 +171,14 @@ export async function PATCH(request: Request) {
         );
       }
       // 收款人確認即直接核銷（同時標記付款人已付）
-      row[8] = "TRUE";
-      row[9] = "TRUE";
-      row[10] = new Date().toISOString();
+      await updateCells("付款追蹤表", targetRow, [
+        { col: 8, value: "TRUE" },
+        { col: 9, value: "TRUE" },
+        { col: 10, value: nowIso },
+      ]);
     } else {
       return NextResponse.json({ error: "無效的操作" }, { status: 400 });
     }
-
-    // 補滿欄位，避免稀疏陣列在寫回 Sheets 時產生空洞
-    for (let i = 0; i < 12; i++) {
-      if (row[i] === undefined || row[i] === null) row[i] = "";
-    }
-
-    await updateRow("付款追蹤表", targetRow, row);
 
     return NextResponse.json({ success: true });
   } catch (error) {

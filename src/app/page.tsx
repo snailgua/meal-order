@@ -35,14 +35,20 @@ export default function HomePage() {
   const [aiParsing, setAiParsing] = useState(false);
   const [transcriptImages, setTranscriptImages] = useState<File[]>([]);
 
+  const [fetchError, setFetchError] = useState(false);
+
   const fetchSessions = useCallback(async () => {
     try {
       const res = await fetch("/api/sessions");
       if (res.ok) {
         setSessions(await res.json());
+        setFetchError(false);
+      } else {
+        setFetchError(true);
       }
     } catch (err) {
       console.error("Failed to fetch sessions:", err);
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -413,6 +419,18 @@ export default function HomePage() {
                               return { data: base64, mimeType };
                             })
                           );
+                          // Vercel request body 上限 4.5MB，超過會直接 413
+                          const totalSize = images.reduce(
+                            (sum, img) => sum + img.data.length,
+                            0
+                          );
+                          if (totalSize > 3_500_000) {
+                            setFailedLines([
+                              "截圖總大小超過限制，請一次少選幾張、分批解析（解析結果會累加）",
+                            ]);
+                            setAiParsing(false);
+                            return;
+                          }
                           const res = await fetch("/api/parse-ai", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
@@ -652,7 +670,9 @@ export default function HomePage() {
       {loading ? (
         <p className="text-center text-stone-400 py-12">載入中...</p>
       ) : sessions.length === 0 ? (
-        <p className="text-center text-stone-400 py-12">今天還沒有訂餐場次</p>
+        <p className="text-center text-stone-400 py-12">
+          {fetchError ? "載入失敗，請稍後重新整理" : "今天還沒有訂餐場次"}
+        </p>
       ) : (
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           {sessions.map((session, i) => (

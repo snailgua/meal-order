@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getRows, appendRow } from "@/lib/sheets";
+import { getRows, appendRows } from "@/lib/sheets";
+import { reconcilePayments, newOrderId } from "@/lib/reconcilePayments";
 
 // 批次新增訂單（轉錄匯入用）
 // Body: { sessionId: string, orders: { name: string, item: string, price: number, note?: string }[] }
@@ -31,8 +32,8 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
-    let created = 0;
 
+    const rows: string[][] = [];
     for (const order of orders) {
       const name = (order.name || "").trim();
       const item = (order.item || "").trim();
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
 
       if (!name || !item || !Number.isFinite(price) || price <= 0) continue;
 
-      await appendRow("訂單明細表", [
+      rows.push([
         sessionId,
         session[1], // 日期
         session[2], // 標題
@@ -52,11 +53,22 @@ export async function POST(request: Request) {
         note,
         now,
         now,
+        newOrderId(),
       ]);
-      created++;
+    }
+    await appendRows("訂單明細表", rows);
+
+    // 寫入期間場次可能剛好被關閉，補跑 reconcile 讓這批訂單也有付款列
+    const afterRows = await getRows("訂餐場次表");
+    const after = afterRows.slice(1).find((r) => r[0] === sessionId);
+    if (after && after[8] === "已關閉") {
+      await reconcilePayments(sessionId, after);
     }
 
-    return NextResponse.json({ success: true, created }, { status: 201 });
+    return NextResponse.json(
+      { success: true, created: rows.length },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Failed to batch create orders:", error);
     return NextResponse.json({ error: "批次新增訂單失敗" }, { status: 500 });
