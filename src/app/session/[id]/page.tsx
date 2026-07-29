@@ -987,10 +987,10 @@ export default function SessionPage({
                     multiple
                     className="hidden"
                     onChange={(e) => {
-                      setTranscriptImages((prev) => [
-                        ...prev,
-                        ...Array.from(e.target.files || []),
-                      ]);
+                      // 先複製出來：e.target.files 是即時 FileList，
+                      // 清空 value 後、updater 執行時就變空了
+                      const files = Array.from(e.target.files || []);
+                      setTranscriptImages((prev) => [...prev, ...files]);
                       e.target.value = "";
                     }}
                   />
