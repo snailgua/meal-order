@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { uploadFile } from "@/lib/storage";
 
+// 最多 10 張、合計 30 MB 上傳到 GCS，需要高於預設 timeout
+export const maxDuration = 60;
+
 const MAX_FILES = 10;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 30 * 1024 * 1024;

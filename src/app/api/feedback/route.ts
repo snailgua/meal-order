@@ -3,6 +3,9 @@ import nodemailer from "nodemailer";
 import { appendRow } from "@/lib/sheets";
 import { optionalText, requiredText } from "@/lib/inputValidation";
 
+// 寫 Sheets 遇到配額退避最長約 20 秒，再加上寄信，需要高於預設 timeout
+export const maxDuration = 60;
+
 // 問題回報表 column layout:
 // [0]回報時間 [1]姓名 [2]類型 [3]描述 [4]截圖連結(逗號分隔) [5]回覆(人工填寫)
 

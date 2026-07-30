@@ -227,7 +227,7 @@ npm start          # 啟動生產 server
 
 ---
 
-## 七、實作狀態與技術備忘（2026-04-13 更新）
+## 七、實作狀態與技術備忘（2026-07-30 更新）
 
 ### 功能完成度
 
@@ -236,7 +236,8 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
 - **建立即關閉（對帳模式）**：實際使用上大家仍在 LINE 接龍點餐，app 主要用來銷帳。因此建立場次時**若有預先輸入訂單，匯入成功後前端會自動 PATCH 關閉場次**，直接產生付款追蹤紀錄；沒有預輸入訂單則維持「開放中」。需要線上加點可到場次頁「重新開放訂餐」。
 - **預先輸入訂單**：建立場次時，團主可預先輸入訂單，支援兩種方式：
   - **轉錄匯入（含 AI 智慧解析）**：支援**貼上文字**或**上傳截圖**兩種方式，場次頁也可事後匯入。文字輸入按「解析文字」後先用 regex parser（`src/lib/parseTranscript.ts`）嘗試，支援每行「姓名 品項 價格」、「你訂」平台、餐盒平台等已知格式。**若 regex 無法解析或有上傳截圖，自動使用 Gemini AI 多模態解析**（`/api/parse-ai`），可處理任意格式的文字及圖片（LINE 接龍截圖、菜單截圖等）。**截圖支援一次多張**（前端先各自縮圖壓縮，一次請求送出，跨圖重複的訂單只算一筆）。按鈕會顯示「AI 解析中...」提示。解析結果可逐筆編輯、刪除後再匯入。
-  - **手動新增**：按「手動新增一筆訂單」逐筆輸入姓名、品項、價格、備註。兩種方式可混合使用，共用同一份訂單列表。
+  - **解析結果是累加的**（可以分批貼文字、分批上傳截圖）。因此**已經吃進草稿的輸入一定要從來源清掉**：成功解析後清空輸入框（只留解析失敗的行）、清空已選截圖。少做這步的話重複按一次「解析文字」就會把同一份接龍變成兩份訂單。
+  - **手動新增**：按「手動新增一筆訂單」逐筆輸入姓名、品項、價格、備註。兩種方式可混合使用，共用同一份訂單列表。完全空白的列在匯入時直接忽略（按了「手動新增」卻沒填不該讓整批被拒、讓團主完全建不了場次）。
 - **場次資訊可編輯**：標題、負責人姓名、銀行名稱、銀行帳號、收款 QR Code（上傳/更換/移除）、轉帳連結、菜單圖片（多張上傳/移除）皆可在場次頁面直接編輯。圖片上傳使用樣式化按鈕（虛線框），非原生 file input。**編輯標題或負責人時會同步更新訂單明細表和付款追蹤表**。
 - **付款追蹤頁面改進**：
   - 以收款人分組，同一收款人底下的欠款按**付款人姓名排序**，同一人的多筆品項合併顯示（名字只出現一次，附合計金額）。
@@ -249,8 +250,10 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
 - **Email 通知**：問題回報送出後自動寄 email 通知管理者（透過 nodemailer + Gmail SMTP）。環境變數：`SMTP_EMAIL`, `SMTP_PASSWORD`, `NOTIFICATION_EMAIL`。
 - **時區修正**：所有 API 時間戳使用 `Asia/Taipei` 時區（`toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })`），非 UTC。
 - **圖片全螢幕檢視**：QR Code 和菜單圖片點擊後以全螢幕 modal 放大檢視。
-- **自動輪詢**：首頁、場次頁與付款頁透過 `usePolling`（`src/lib/usePolling.ts`）每 15 秒刷新，**分頁切到背景時停止輪詢、回前景立刻補抓一次**。每次輪詢是 2 次 Sheets 讀取，免費額度只有 300 次/分鐘/專案，不減量的話幾十人同時開著就會 429。畫面顯示最後更新時間與錯誤狀態。
-- **自動清理**：進入付款追蹤頁時自動呼叫 cleanup API；3 個月前、已有訂單 ID 的核銷列會清除付款個資並壓成封存標記，保留 sessionId/orderId/核銷狀態，避免日後對帳把已付訂單重新建成欠款。
+- **自動輪詢**：首頁、場次頁與付款頁透過 `usePolling`（`src/lib/usePolling.ts`）每 15 秒刷新，**分頁切到背景時停止輪詢、回前景立刻補抓一次**。每次輪詢是 2 次 Sheets 讀取，很容易撞到配額（見「已知注意事項 1d」）。畫面顯示最後更新時間與錯誤狀態。
+- **自動清理**：進入付款追蹤頁時自動呼叫 cleanup API，做兩件事：
+  - 同一訂單 ID 若殘留多列未核銷付款就去重（留最有付款進度的那列）。reconcile 只在該場次再被動到時才收斂，沒人再碰的舊場次會一直重複計費。
+  - 3 個月前、**已有訂單 ID** 的核銷列清除付款個資並壓成封存標記（`[1]` 欄寫 `__ARCHIVED_PAYMENT__`），保留 sessionId/orderId/核銷狀態，避免日後對帳把已付訂單重新建成欠款。沒有訂單 ID 的核銷列會被跳過 —— 封存會清掉內容比對用的欄位，壓了就沒東西能讓 reconcile 認出「這筆已經付過」，寧可留著個資也不能讓舊欠款復活。
 - **使用教學頁面**（`/guide`）：流程圖風格說明訂餐與付款流程，含信任制提醒、Google Sheet 連結。
 - **問題回報頁面**（`/feedback`）：表單寫入 Google Sheets「問題回報表」，問題類型下拉選單（Bug 回報/功能建議/其他），支援多張截圖上傳（GCS）。送出後寄 email 通知。
 - **底部導覽列 4 tab**：怎麼用？→ 今日訂餐（預設）→ 付款追蹤 → 回報問題
@@ -285,55 +288,96 @@ P0–P3 所有功能皆已完成。另外新增以下功能：
 
 ### 關鍵檔案結構
 
+帳務正確性的核心都在 `src/lib/`，且刻意寫成**純函式 + 有測試**，因為這裡算錯就是真的金錢糾紛。
+API route 只負責取鎖、讀資料、呼叫 planner、原子套用。
+
 ```
-src/
-├── lib/
-│   ├── sheets.ts          # Google Sheets CRUD（getRows, appendRow, updateRow, deleteRow）
-│   ├── storage.ts         # Google Cloud Storage 上傳（uploadFile）
-│   └── parseTranscript.ts # 轉錄文字解析（共用：首頁建立場次 + 場次頁匯入）
-├── app/
-│   ├── page.tsx           # 首頁：場次列表 + 建立新場次（含轉錄匯入）
-│   ├── session/[id]/page.tsx  # 場次詳細：訂餐表單 + 轉錄匯入 + 訂單列表 + 統計摘要
-│   ├── payments/page.tsx  # 付款追蹤：未付款清單 + 雙重確認
-│   ├── guide/page.tsx     # 使用教學頁面
-│   ├── feedback/page.tsx  # 問題回報頁面
-│   └── api/
-│       ├── sessions/route.ts      # GET(今日場次), POST(建立)
-│       ├── sessions/[id]/route.ts # GET(單一場次), PATCH(改狀態/標題/負責人/銀行/QR Code/轉帳連結/菜單圖片), DELETE(刪除場次+訂單+付款)
-│       ├── orders/route.ts        # GET, POST, PUT, DELETE
-│       ├── orders/batch/route.ts  # POST(批次新增訂單，轉錄匯入用)
-│       ├── payments/route.ts      # GET(未核銷), PATCH(確認付款/收款，收款人確認即核銷)
-│       ├── feedback/route.ts      # POST(問題回報寫入 Google Sheets，含截圖連結 + email 通知)
-│       ├── parse-ai/route.ts      # POST(Gemini AI 解析任意格式訂單文字)
-│       ├── upload/route.ts        # POST(上傳圖片到 GCS)
-│       └── cleanup/route.ts      # POST(清除 3 個月前已核銷紀錄)
-├── components/
-│   └── BottomNav.tsx      # 底部導覽列（4 tab：怎麼用？/ 今日訂餐 / 付款追蹤 / 回報問題）
-└── types/
-    └── index.ts           # TypeScript 型別定義
+src/lib/                     # ★ 帶 .test.ts 的都是純函式，改動前先看測試守住什麼契約
+├── sheets.ts                # Sheets 存取層：getRows / appendRow(s) / updateCells /
+│                            #   applyAtomicSheetMutations（單一 batchUpdate 原子套用）/
+│                            #   tombstone 工具（isDeletedRow, isTombstoneFor）/ 429 退避重試
+├── reconcilePayments.ts     # ★ 對帳核心。planReconcilePayments() 是純函式，回傳 mutation 計畫
+├── paymentRules.ts          # ★ 付款狀態判定（isSettledPayment / hasPaymentConfirmation / 欄位同步）
+├── resourceLock.ts          # 跨 instance 寫入鎖（GCS ifGenerationMatch=0）
+├── sessionVersion.ts        # ★ 場次 CAS 三態判定：apply / replay / conflict
+├── inputValidation.ts       # ★ 輸入正規化與 requestId 格式驗證（idempotencyKey）
+├── sheetSchema.ts           # ★ 工作表 header schema 與相容變體（setup-sheets 用）
+├── requestId.ts             # ★ newRequestId()：時間戳 + UUID，含非 secure context fallback
+├── maintenance.ts           # sheetWritesPaused()：SHEETS_MAINTENANCE_MODE 開關
+├── usePolling.ts            # 輪詢 hook，分頁切背景時停止
+├── compressImage.ts         # 截圖上傳前的縮圖壓縮（避開 Vercel 4.5MB body 上限）
+├── parseTranscript.ts       # 轉錄文字 regex 解析（首頁與場次頁共用）
+└── storage.ts               # GCS 圖片上傳
+
+src/app/
+├── page.tsx                 # 首頁：場次列表 + 建立新場次（含轉錄匯入、建立即關閉）
+├── session/[id]/page.tsx    # 場次詳細：訂餐表單 + 轉錄匯入 + 訂單列表 + 統計摘要 + 關閉/重開
+├── payments/page.tsx        # 付款追蹤：未付款清單 + 雙重確認 + 按錯了 + 更新 QR
+├── guide/page.tsx           # 使用教學
+├── feedback/page.tsx        # 問題回報
+└── api/
+    ├── sessions/route.ts      # GET(今日場次), POST(建立，requestId 冪等)
+    ├── sessions/[id]/route.ts # GET, PATCH(狀態/資訊，CAS + reconcile), DELETE(整場 tombstone)
+    ├── orders/route.ts        # GET, POST, PUT, DELETE（皆取鎖 + ID 定位 + 同步付款列）
+    ├── orders/batch/route.ts  # POST(批次匯入，轉錄匯入用)
+    ├── payments/route.ts      # GET(未核銷), PATCH(payerConfirm / receiverConfirm / payerUndo)
+    ├── feedback/route.ts      # POST(寫入問題回報表 + email 通知)
+    ├── parse-ai/route.ts      # POST(Gemini 解析文字/多張圖片)
+    ├── upload/route.ts        # POST(上傳圖片到 GCS)
+    └── cleanup/route.ts       # POST(重複未核銷列去重 + 90 天前核銷列壓成封存標記)
+
+src/components/BottomNav.tsx  # 底部導覽列（4 tab）
+src/types/index.ts            # Session / Order / Payment 型別
+
+scripts/                      # 都不是自動執行的，需要時手動跑
+├── setup-sheets.ts           # 初始化工作表（header 不相容時零寫入中止）
+├── backfill-order-ids.ts     # 一次性補訂單ID（預設 dry-run，--apply 需 maintenance flags）
+└── compact-tombstones.ts     # 清除累積的 __DELETED__ 空列（預設 dry-run，--apply 才刪）
 ```
 
 ### 已知注意事項
 
 1. **欄位索引硬編碼**：所有 API route 使用 `row[N]` 存取 Google Sheets 欄位，若在 Google Sheets 中新增/刪除/移動欄位，必須同步更新對應的 API route
 1a. **以訂單ID定位，不用列號**：訂單有不可變的 `[10]訂單ID`，付款列以 `[12]訂單ID` 對應來源訂單。建立場次、單筆訂單與批次匯入由前端產生 timestamped UUID `requestId`，伺服器用它產生 deterministic ID 並辨識失敗重送，避免 append 成功但回應遺失後重複建單。訂單 PUT/DELETE 與付款 PATCH 優先用 ID 定位；無 ID 的舊資料退回「rowIndex + 內容驗證」（客戶端帶 `original`/`expected`），找不到回 409。`scripts/backfill-order-ids.ts` 預設只 dry-run；apply 前必須停寫、備份並帶齊 maintenance flags
-1b. **付款列一致性靠 `reconcilePayments()`**（`src/lib/reconcilePayments.ts`）：以訂單為準冪等對帳（已核銷/已有付款證據的衝突列保留、未確認列同步/刪重複/刪孤兒、缺的補建）。同一場次的訂單、場次狀態與付款 mutation 會先用 GCS generation precondition 取得跨 instance lock；需跨表變更時再用單一 Sheets `batchUpdate` 原子套用，避免關閉/新增、修改/付款同時交錯或只成功一半。場次 PATCH 另以 `[11]版本` 做 CAS，避免關閉→重開後舊關閉請求才抵達的 stale retry。已有人標記付款後不可修改或刪除來源訂單，也不可更換團主
+1b. **付款列一致性靠 `planReconcilePayments()`**（`src/lib/reconcilePayments.ts`）：以訂單為準冪等對帳（已核銷/已有付款證據的衝突列保留、未確認列同步/刪重複/刪孤兒、缺的補建）。同一場次的訂單、場次狀態與付款 mutation 會先用 GCS generation precondition 取得跨 instance lock；需跨表變更時再用單一 Sheets `batchUpdate` 原子套用，避免關閉/新增、修改/付款同時交錯或只成功一半。場次 PATCH 另以 `[11]版本` 做 CAS，避免關閉→重開後舊關閉請求才抵達的 stale retry。已有人標記付款後不可修改或刪除來源訂單，也不可更換團主
+
+**改 reconcile 前務必知道的三條不變式**（都是踩過的坑，`reconcilePayments.test.ts` 有守住）：
+   - **刪除與補建同進退**：`createMissing` 為 false 時（超過 90 天保留期）**也不可以刪除**配不到訂單的列。只刪不補會讓 reconcile 淨減少欠款 —— 錢就這樣不見了。換團主這種「刪一列補一列」的成對操作要傳 `allowArchivedCreate`，否則舊場次會只刪不補
+   - **有付款證據的孤兒列會被保留，補建時要先扣掉它**：否則同一餐出現兩列欠款、付款頁合計加倍
+   - **已核銷列（含封存標記）永不改動**，但要在 Pass 1 先佔用對應訂單，重開再關才不會為已付清的訂單重建欠款
 1c. **刪除採 tombstone，不做實體刪列**：刪除會把 A 欄改成 `__DELETED__`；有 immutable ID 的資源使用 `__DELETED__:<ID>` 保留 durable key，其餘欄位清空。這既避免後續列號位移，也防止已刪資源被延遲的舊 POST 重新建立。**代價是 Sheet 上會慢慢累積這些空列**，團主在 Google Sheet 上會直接看到。要清掉用 `npx tsx scripts/compact-tombstones.ts`（預設 dry-run，`--apply` 才實際刪除）：它只刪「位於最後一筆真實資料之後」的 tombstone，所以真實列的列號不會變動，即使有人正在使用也安全；夾在資料中間的會跳過，那種要先讓部署進入 `SHEETS_MAINTENANCE_MODE=1` 再離線處理
-1d. **Sheets 429 是常態，不是意外**：免費額度 300 次讀取/分鐘/專案，而 50-60 人開著輪詢頁面很容易撞到。`src/lib/sheets.ts` 的每個 API 呼叫都包了指數退避重試（429/5xx，最多 4 次）；前端則靠 `usePolling` 在背景分頁停止輪詢來減量。新增讀取路徑時要一併考慮這個額度
+1d. **Sheets 429 是常態，不是意外**：實測撞到的是 **`Read requests per minute per user` = 60 次/分鐘**（不是 300/分鐘/專案那條）。因為全 app 共用一組 service account，所有請求都算同一個 "user"，所以要拿 **60/分鐘** 來估算，不是 300。而一次輪詢就是 2 次讀取 → 大約 5 個人同時開著頁面就吃滿。因應方式：`src/lib/sheets.ts` 的每個 API 呼叫都包了指數退避重試（429/5xx，最多 4 次，實測會退避到 20 秒，所以各 route 需要 `maxDuration = 60`）；前端靠 `usePolling` 在背景分頁停止輪詢減量。**新增讀取路徑前先算一下它會讓每分鐘多幾次讀取**，能合併成一次 `getRows` 就不要拆兩次
 1e. **requestId 一律用 `newRequestId()`**（`src/lib/requestId.ts`），不要直接寫 `crypto.randomUUID()`：它只在 secure context 存在，手機連區網 dev server（http）或舊 in-app 瀏覽器會是 undefined，少了 fallback 整個 app 會完全無法寫入。格式必須通過 `idempotencyKey()` 驗證，`requestId.test.ts` 有守住這個契約
+1f. **寫入只走 `updateCells` / `applyAtomicSheetMutations`**：`sheets.ts` 還留著 `updateRow()` 與 `deleteRow()`，但**目前沒有任何呼叫端，也不該再用**。`updateRow` 是整列覆寫，兩人同時動同一列會互相蓋掉對方剛寫入的欄位（付款確認就是這樣被蓋掉過）；`deleteRow` 雖然已改成 tombstone，但它是單獨一次寫入，無法和其他表的變更放進同一個原子 batch。同理 `reconcilePayments()`（async 版）也已無呼叫端，一律改用 `planReconcilePayments()` 拿計畫、再交給 `applyAtomicSheetMutations` 一次套用
 2. **圖片需公開讀取**：GCS bucket 必須授予 `allUsers` 為 Storage Object Viewer，否則圖片 URL 會 403
 3. **文字自動 trim**：所有使用者輸入的文字欄位（姓名、品項、備註、標題等）在寫入 Sheets 前會自動 `.trim()`
 4. **信任制操作警告**：「我已轉帳」會提示付款人姓名確認、「確認收到」和「重新開放訂餐」和「關閉訂餐」按鈕會跳 confirm 警告，提醒只有團主/收款人才該點
+4a. **信任制要留回頭路**：沒有登入系統，誤按是常態。任何「按了就再也改不了」的操作都要有撤銷途徑，否則只能人工改 Google Sheet（「我已轉帳」的「按錯了」就是為此而加）。同理，寫入失敗時不要把使用者剛填的草稿丟掉 —— 場次資訊編輯遇到 409 會保留草稿（裡面可能有剛上傳的 QR 圖）並讓他直接重試
 5. **Hydration 問題**：若改了 layout 或首頁文字後出現 hydration mismatch，需 `mv .next ~/.Trash/` 再重啟 dev server
-6. **環境變數**：`.env.local` 包含 `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`, `GCS_BUCKET_NAME`, `SMTP_EMAIL`, `SMTP_PASSWORD`, `NOTIFICATION_EMAIL`, `GEMINI_API_KEY`
+6. **環境變數**：`.env.local` 包含 `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`, `GCS_BUCKET_NAME`, `SMTP_EMAIL`, `SMTP_PASSWORD`, `NOTIFICATION_EMAIL`, `GEMINI_API_KEY`。另有選用的 `SHEETS_MAINTENANCE_MODE=1`：設了之後**所有寫入 API 一律回 503**，供離線維護（例如壓縮 Sheet）時用。注意 `GCS_BUCKET_NAME` 現在是所有寫入的硬性前提（拿不到寫入鎖就不寫），不只用於圖片上傳
 7. **localStorage**：使用者名字會存在 `localStorage("userName")` 中，下次自動帶入
+8. **對正式資料動手前先稽核**：Sheet 就是正式資料庫，沒有 staging。本機 dev server 也連同一份 Sheet，所以跑端到端測試會產生真實列 —— 測完要把測試場次刪掉，需要時再用 `compact-tombstones.ts` 清空列
+
+---
+
+## 測試慣例
+
+`npm test` 跑的是 Node test runner（透過 tsx），測試檔與被測檔放在一起：`src/lib/*.test.ts`。
+
+只對**純函式**寫測試，不 mock Google API。所以帳務判斷都刻意抽成純函式（`planReconcilePayments`、`paymentRules`、`decideSessionMutation`、`inputValidation`、`sheetSchema`），API route 只負責 I/O 與組裝。加新的帳務規則時把邏輯放進這些純函式裡，才測得到。
+
+現有測試守住的契約（改動這些行為前先讀對應測試）：
+- `reconcilePayments.test.ts` —— 對帳的三條不變式（見「已知注意事項 1b」）、舊場次不重建欠款、封存標記仍佔用訂單、重複計費防護
+- `paymentRules.test.ts` —— 同步欄位時不可抹掉付款證據
+- `sessionVersion.test.ts` —— CAS 三態；關閉→重開後舊關閉重送必須被拒
+- `requestId.test.ts` —— `newRequestId()` 產出的格式必須通過伺服器端 `idempotencyKey()`，含沒有 `crypto.randomUUID` 的 fallback 路徑
+- `sheets.test.ts` / `sheetSchema.test.ts` —— tombstone 語意、header 相容變體
 
 ---
 
 ## CLAUDE.md 維護原則
 
-本檔遵循 umbrella `/Users/ac/projects/CLAUDE.md`「CLAUDE.md 維護原則（所有層級）」一節定義的 5 條原則（指令正確性最優先 / 避免過度約束 / 新增前先確認重複 / 完成大任務後審查 / 階層分工不要越界）。新增或修改本檔內容前先對照那節。
-
 **meal-order 專屬注意**：
-- 「Google Sheets 欄位對照」section 是**硬編碼依賴的事實來源** —— 改了就要同步改 API route 中的 `row[N]` 索引。指令正確性原則在這裡是 critical
+- 「Google Sheets 欄位對照」section 是**硬編碼依賴的事實來源** —— 改了就要同步改 API route 中的 `row[N]` 索引，以及 `src/lib/sheetSchema.ts`。指令正確性在這裡是 critical
 - 「實作狀態與技術備忘」會隨功能演進而老化，加新功能時順便檢查舊段落是否還準確
+- 寫進本檔的數字（配額、上限、保留天數）要來自實測或程式碼常數，不要憑印象 —— 曾經把 Sheets 讀取額度寫成 300/分鐘/專案，實際綁住我們的是 60/分鐘/user，差了 5 倍
