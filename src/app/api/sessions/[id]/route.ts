@@ -303,6 +303,9 @@ export async function PATCH(
                   // 歷史欠款重新建回來。
                   createMissing:
                     organizerChanged && row[8] === "已關閉",
+                  // 換團主是「刪一列、補一列」的成對操作，連超過保留期的
+                  // 舊場次也必須允許補建，否則舊團主該付的錢會憑空不見。
+                  allowArchivedCreate: organizerChanged,
                 }
               )
             );

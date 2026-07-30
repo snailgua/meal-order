@@ -70,14 +70,15 @@ export async function POST(request: Request) {
         timeZone: "Asia/Taipei",
       });
       const rows: string[][] = [];
+      let skippedDeleted = 0;
       for (let index = 0; index < normalized.length; index++) {
         const order = normalized[index]!;
         const orderId = `o_${requestId}_${index}`;
         if (orderRows.slice(1).some((row) => isTombstoneFor(row, orderId))) {
-          return NextResponse.json(
-            { error: "這個匯入請求曾建立的訂單已刪除，不能由舊請求重新建立" },
-            { status: 409 }
-          );
+          // 這一筆先前建立過又被刪掉了：跳過它就好，不要因為一筆而讓整批
+          // 重送變成 409。整批 409 會讓團主看到「匯入失敗」，但資料其實在。
+          skippedDeleted++;
+          continue;
         }
         const existing = orderRows
           .slice(1)
@@ -126,6 +127,7 @@ export async function POST(request: Request) {
           success: true,
           created: normalized.length,
           inserted: rows.length,
+          skippedDeleted,
           replayed: rows.length === 0,
         },
         { status: rows.length === 0 ? 200 : 201 }

@@ -354,14 +354,24 @@ async function run() {
       spreadsheetId: SPREADSHEET_ID,
       requestBody: { valueInputOption: "RAW", data: updates },
     });
-    const verification = await sheets.spreadsheets.values.batchGet({
-      spreadsheetId: SPREADSHEET_ID,
-      ranges: updates.map((update) => update.range),
-    });
-    const actual = verification.data.valueRanges || [];
+    // batchGet 的 ranges 走 query string，上百個 range 會讓 URL 超長直接 400，
+    // 結果是「寫入其實成功了，卻報 backfill 失敗並 exit(1)」。分批驗證。
+    const VERIFY_CHUNK = 50;
+    const actual: (typeof updates)[number]["values"][] = [];
+    for (let start = 0; start < updates.length; start += VERIFY_CHUNK) {
+      const chunk = updates.slice(start, start + VERIFY_CHUNK);
+      const verification = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId: SPREADSHEET_ID,
+        ranges: chunk.map((update) => update.range),
+      });
+      const ranges = verification.data.valueRanges || [];
+      for (let index = 0; index < chunk.length; index++) {
+        actual.push((ranges[index]?.values as string[][]) || []);
+      }
+    }
     for (let index = 0; index < updates.length; index++) {
       if (
-        JSON.stringify(actual[index]?.values || []) !==
+        JSON.stringify(actual[index] || []) !==
         JSON.stringify(updates[index].values)
       ) {
         throw new Error(`寫入後驗證失敗：${updates[index].range}`);

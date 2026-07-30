@@ -114,7 +114,23 @@ export default function HomePage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const invalidIndex = parsedOrders.findIndex(
+    // 「手動新增一筆訂單」會先塞一列空白；沒填就整批拒絕會讓團主完全建不了
+    // 場次，而按鈕文字只算有效筆數又看不出原因。完全空白的列直接當作沒加。
+    const isBlankRow = (order: ParsedOrder) =>
+      !String(order.name ?? "").trim() &&
+      !String(order.item ?? "").trim() &&
+      !Number(order.price) &&
+      !String(order.note ?? "").trim();
+    const blankCount = parsedOrders.filter(isBlankRow).length;
+    if (blankCount > 0) {
+      setParsedOrders((prev) => prev.filter((order) => !isBlankRow(order)));
+      setEditingParsedIndex(null);
+    }
+    const parsedOrdersToUse = parsedOrders.filter(
+      (order) => !isBlankRow(order)
+    );
+
+    const invalidIndex = parsedOrdersToUse.findIndex(
       (order) =>
         typeof order.name !== "string" ||
         order.name.trim() === "" ||
@@ -136,14 +152,14 @@ export default function HomePage() {
       );
       return;
     }
-    if (parsedOrders.length > MAX_BATCH_ORDERS) {
+    if (parsedOrdersToUse.length > MAX_BATCH_ORDERS) {
       alert(
         `一次最多匯入 ${MAX_BATCH_ORDERS} 筆訂單，請刪除部分訂單後再試`
       );
       return;
     }
 
-    const ordersToImport = parsedOrders.map((order) => ({ ...order }));
+    const ordersToImport = parsedOrdersToUse.map((order) => ({ ...order }));
     const inputSignature = JSON.stringify({
       form,
       qrCodeFile: qrCodeFile
@@ -165,6 +181,23 @@ export default function HomePage() {
     setSubmitting(true);
     try {
       let pendingSession = sessionRequestRef.current;
+      // 上一次已經送出過建立請求、但這次表單內容不一樣。伺服器端的冪等 key 是
+      // 綁在內容上的，直接放行會建出第二個場次並把同一批訂單再匯入一次。
+      if (
+        pendingSession &&
+        pendingSession.inputSignature !== inputSignature &&
+        !confirm(
+          "上一次的建立請求可能已經送出成功（只是沒收到回應）。\n\n" +
+            "現在的內容跟上次不一樣，繼續會建立「另一個」新場次。\n" +
+            "請先取消，回今日訂餐確認一下有沒有已經建好的場次。\n\n" +
+            "確定還是要建立一個新場次嗎？"
+        )
+      ) {
+        setSubmitting(false);
+        setUploadProgress("");
+        fetchSessions();
+        return;
+      }
       if (!pendingSession || pendingSession.inputSignature !== inputSignature) {
         let qrCodeUrl = "";
         let menuImages: string[] = [];
@@ -279,7 +312,15 @@ export default function HomePage() {
         alert(data.error || "建立失敗");
       }
     } catch {
-      alert("網路錯誤，請稍後再試");
+      // 送出後失聯時，場次有可能其實已經建好了。直接說「網路錯誤」會讓團主
+      // 改個字再按一次，結果建出第二個場次、訂單也匯入兩份。
+      alert(
+        "網路中斷，不確定是否已經建立成功。\n\n" +
+          "請先看一下「今日訂餐」列表：\n" +
+          "• 已經有這個場次 → 不要再按建立，直接點進去即可\n" +
+          "• 還沒有 → 內容不要改動，直接再按一次「建立場次」就會接續完成"
+      );
+      fetchSessions();
     } finally {
       setSubmitting(false);
       setUploadProgress("");
@@ -631,8 +672,11 @@ export default function HomePage() {
                       const regexOrders = result.orders;
                       const failed = result.failedLines;
 
+                      // 解析結果是累加的，已經吃進草稿的文字一定要從輸入框
+                      // 移除，否則再按一次「解析文字」就會把同一批再加一遍。
                       if (failed.length === 0 && regexOrders.length > 0) {
                         setParsedOrders((prev) => [...prev, ...regexOrders]);
+                        setTranscriptText("");
                         setFailedLines([]);
                         return;
                       }
@@ -660,18 +704,29 @@ export default function HomePage() {
                             ...aiOrders,
                           ]);
                           if (aiOrders.length === 0) {
+                            setTranscriptText(
+                              regexOrders.length > 0 ? failed.join("\n") : transcriptText
+                            );
                             setFailedLines([
                               regexOrders.length > 0
                                 ? "AI 沒有辨識到其他可匯入的訂單，原有草稿與文字已保留，請確認內容後再試"
                                 : "AI 沒有辨識到可匯入的訂單，原有草稿與文字已保留，請確認內容後再試",
                             ]);
+                          } else {
+                            setTranscriptText("");
                           }
                         } else {
                           setParsedOrders((prev) => [...prev, ...regexOrders]);
+                          setTranscriptText(
+                            regexOrders.length > 0 ? failed.join("\n") : transcriptText
+                          );
                           setFailedLines(failed.length > 0 ? failed : [transcriptText]);
                         }
                       } catch {
                         setParsedOrders((prev) => [...prev, ...regexOrders]);
+                        setTranscriptText(
+                          regexOrders.length > 0 ? failed.join("\n") : transcriptText
+                        );
                         setFailedLines(failed.length > 0 ? failed : [transcriptText]);
                       } finally {
                         setAiParsing(false);

@@ -310,3 +310,71 @@ test("an unconfirmed orphan is still replaced by a correct new payment row", () 
     "並補上與訂單一致的欠款"
   );
 });
+
+test("a reconcile that cannot create must not delete either", () => {
+  // 超過 90 天保留期的舊場次：Pass 3 補建被關掉。若 Pass 2/4 照樣刪掉
+  // 配不到訂單的列，reconcile 就會淨減少欠款 —— 錢就這樣不見了。
+  const orders = [
+    ["場次ID"],
+    [
+      "s_1",
+      "2026-01-01",
+      "午餐",
+      "小華",
+      "小明",
+      "爌肉飯",
+      "100",
+      "",
+      "created",
+      "updated",
+      "o_1",
+    ],
+  ];
+  const staleRow = [
+    "s_1",
+    "2026-01-01",
+    "午餐",
+    "小美",
+    "小華",
+    "80",
+    "已刪除的餐",
+    "",
+    "FALSE",
+    "FALSE",
+    "",
+    "",
+    "o_gone",
+  ];
+
+  const blocked = planReconcilePayments(
+    "s_1",
+    sessionRow("2026-01-01"),
+    orders,
+    [["場次ID"], staleRow],
+    { now: NOW }
+  );
+  assert.equal(
+    blocked.some((mutation) => mutation.type === "tombstoneRow"),
+    false,
+    "不能補建時也不該刪除，否則欠款淨減少"
+  );
+
+  // 允許補建時（真正的開放→關閉轉換）才可以連帶清掉對不上的列
+  const allowed = planReconcilePayments(
+    "s_1",
+    sessionRow("2026-01-01"),
+    orders,
+    [["場次ID"], staleRow],
+    { allowArchivedCreate: true, now: NOW }
+  );
+  assert.equal(
+    allowed.some((mutation) => mutation.type === "tombstoneRow"),
+    true,
+    "可以補建時就該一起清掉孤兒列"
+  );
+  assert.equal(
+    allowed.some((mutation) => mutation.type === "appendRows"),
+    true,
+    "並補上正確的欠款"
+  );
+});

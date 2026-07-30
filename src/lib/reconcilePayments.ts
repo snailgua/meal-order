@@ -77,6 +77,10 @@ export function planReconcilePayments(
   const createMissing =
     (options.createMissing ?? true) &&
     (options.allowArchivedCreate === true || !beyondRetention);
+  // 刪除必須跟補建同進退。只刪不補會讓 reconcile 淨減少欠款：例如超過保留
+  // 期的舊場次換團主時，舊團主該付的那列補不出來，新團主原本的欠款卻被刪掉，
+  // 錢就這樣消失了。不能補的時候寧可留著對不上的列讓人工處理。
+  const removeStale = createMissing;
   const organizer = sessionRow[3];
   const orders = orderRows.slice(1).filter((r) => r[0] === sessionId);
   const mutations: AtomicSheetMutation[] = [];
@@ -143,6 +147,13 @@ export function planReconcilePayments(
         );
         const key = orphanKey(row[3], row[5]);
         keptOrphanClaims.set(key, (keptOrphanClaims.get(key) || 0) + 1);
+        continue;
+      }
+      if (!removeStale) {
+        console.error(
+          `reconcile 不能補建，因此也不刪除對不到訂單的列：` +
+            `session=${sessionId}, row=${rowNum}`
+        );
         continue;
       }
       toDelete.push(rowNum);

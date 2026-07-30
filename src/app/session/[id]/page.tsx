@@ -121,6 +121,24 @@ export default function SessionPage({
   const sessionPatchRequestRef = useRef<StableRequestId | null>(null);
   const titleExpectedVersionRef = useRef("");
   const infoExpectedVersionRef = useRef("");
+  // 進入編輯當下的伺服器值。場次版本會因為關閉/重開這種無關的操作而變動，
+  // 只要正在編輯的欄位在伺服器端沒被別人動過，就讓 CAS 版本跟上，
+  // 否則使用者按儲存只會一直吃到假的「已被其他人更新」。
+  const titleEditBaseRef = useRef("");
+  const infoEditBaseRef = useRef("");
+  // 收到 409 後使用者已被告知資料變了；若他選擇再按一次儲存，就以他的草稿為準，
+  // 所以下一次抓到資料時無條件把版本跟上，不然會卡在無限 409。
+  const forceVersionSyncRef = useRef(false);
+
+  const infoFingerprint = (s: SessionDetail) =>
+    JSON.stringify([
+      s.organizer,
+      s.bankName,
+      s.bankAccount,
+      s.qrCodeUrl || "",
+      s.transferLink || "",
+      (s.menuImages || []).join(","),
+    ]);
 
   useEffect(() => {
     const savedName = localStorage.getItem("userName");
@@ -160,6 +178,23 @@ export default function SessionPage({
   }, [id]);
 
   usePolling(fetchData);
+
+  useEffect(() => {
+    if (!session) return;
+    const force = forceVersionSyncRef.current;
+    if (editingTitle && (force || session.title === titleEditBaseRef.current)) {
+      titleExpectedVersionRef.current = session.version;
+      titleEditBaseRef.current = session.title;
+    }
+    if (
+      editingInfo &&
+      (force || infoFingerprint(session) === infoEditBaseRef.current)
+    ) {
+      infoExpectedVersionRef.current = session.version;
+      infoEditBaseRef.current = infoFingerprint(session);
+    }
+    forceVersionSyncRef.current = false;
+  }, [session, editingTitle, editingInfo]);
 
   // Statistics
   const stats: ItemStat[] = useMemo(() => {
@@ -530,8 +565,11 @@ export default function SessionPage({
     const regexOrders = result.orders;
     const failed = result.failedLines;
 
+    // 解析結果是累加的（可以分批貼、分批上傳截圖），所以已經吃進草稿的文字
+    // 一定要從輸入框移除，否則再按一次「解析文字」就會把同一批訂單再加一遍。
     if (failed.length === 0 && regexOrders.length > 0) {
       setParsedOrders((prev) => [...prev, ...regexOrders]);
+      setTranscriptText("");
       setFailedLines([]);
       return;
     }
@@ -551,18 +589,24 @@ export default function SessionPage({
         const aiOrders = Array.isArray(data.orders) ? data.orders : [];
         setParsedOrders((prev) => [...prev, ...regexOrders, ...aiOrders]);
         if (aiOrders.length === 0) {
+          // 沒吃到任何新訂單就把文字留著讓人改；regex 那批已進草稿，要移掉
+          setTranscriptText(regexOrders.length > 0 ? failed.join("\n") : transcriptText);
           setFailedLines([
             regexOrders.length > 0
               ? "AI 沒有辨識到其他可匯入的訂單，原有草稿與文字已保留，請確認內容後再試"
               : "AI 沒有辨識到可匯入的訂單，原有草稿與文字已保留，請確認內容後再試",
           ]);
+        } else {
+          setTranscriptText("");
         }
       } else {
         setParsedOrders((prev) => [...prev, ...regexOrders]);
+        setTranscriptText(regexOrders.length > 0 ? failed.join("\n") : transcriptText);
         setFailedLines(failed.length > 0 ? failed : [transcriptText]);
       }
     } catch {
       setParsedOrders((prev) => [...prev, ...regexOrders]);
+      setTranscriptText(regexOrders.length > 0 ? failed.join("\n") : transcriptText);
       setFailedLines(failed.length > 0 ? failed : [transcriptText]);
     } finally {
       setAiParsing(false);
@@ -571,7 +615,19 @@ export default function SessionPage({
 
   const handleTranscriptImport = async () => {
     if (parsedOrders.length === 0) return;
-    const invalidIndex = parsedOrders.findIndex(
+    // 「手動新增一筆訂單」會先塞一列空白，沒填就整批拒絕會讓人卡住匯入
+    const isBlankRow = (order: { name: string; item: string; price: number; note: string }) =>
+      !String(order.name ?? "").trim() &&
+      !String(order.item ?? "").trim() &&
+      !Number(order.price) &&
+      !String(order.note ?? "").trim();
+    const usable = parsedOrders.filter((order) => !isBlankRow(order));
+    if (usable.length !== parsedOrders.length) {
+      setParsedOrders(usable);
+      setEditingParsedIndex(null);
+    }
+    if (usable.length === 0) return;
+    const invalidIndex = usable.findIndex(
       (order) =>
         typeof order.name !== "string" ||
         order.name.trim() === "" ||
@@ -592,7 +648,7 @@ export default function SessionPage({
       );
       return;
     }
-    if (parsedOrders.length > MAX_BATCH_ORDERS) {
+    if (usable.length > MAX_BATCH_ORDERS) {
       alert(
         `一次最多匯入 ${MAX_BATCH_ORDERS} 筆訂單，請刪除部分訂單後再試`
       );
@@ -601,7 +657,7 @@ export default function SessionPage({
 
     const payload = {
       sessionId: id,
-      orders: parsedOrders.map((order) => ({ ...order })),
+      orders: usable.map((order) => ({ ...order })),
     };
     const requestId = getStableRequestId(
       transcriptBatchRequestRef,
@@ -699,14 +755,18 @@ export default function SessionPage({
                   if (res.ok) {
                     sessionPatchRequestRef.current = null;
                     setEditingTitle(false);
-                    fetchData();
+                    await fetchData();
                   } else {
                     const data = await res.json();
-                    alert(data.error || "更新失敗");
                     if (res.status === 409) {
                       sessionPatchRequestRef.current = null;
-                      setEditingTitle(false);
-                      fetchData();
+                      forceVersionSyncRef.current = true;
+                      await fetchData();
+                      alert(
+                        `${data.error || "更新失敗"}\n\n已幫你抓最新資料，剛才輸入的標題還在，請再按一次儲存。`
+                      );
+                    } else {
+                      alert(data.error || "更新失敗");
                     }
                   }
                 } catch {
@@ -746,6 +806,7 @@ export default function SessionPage({
                 onClick={() => {
                   setTitleDraft(session.title);
                   titleExpectedVersionRef.current = session.version;
+                  titleEditBaseRef.current = session.title;
                   setEditingTitle(true);
                 }}
                 className="text-stone-400 text-xs px-1.5 py-0.5 border border-stone-200 rounded-lg"
@@ -790,14 +851,20 @@ export default function SessionPage({
                 if (res.ok) {
                   sessionPatchRequestRef.current = null;
                   setEditingInfo(false);
-                  fetchData();
+                  await fetchData();
                 } else {
                   const data = await res.json();
-                  alert(data.error || "更新失敗");
                   if (res.status === 409) {
+                    // 409 時不要關掉編輯器：草稿裡可能有剛上傳的 QR Code，
+                    // 關掉就得整個重做。抓最新版本後讓使用者直接再按儲存。
                     sessionPatchRequestRef.current = null;
-                    setEditingInfo(false);
-                    fetchData();
+                    forceVersionSyncRef.current = true;
+                    await fetchData();
+                    alert(
+                      `${data.error || "更新失敗"}\n\n已幫你抓最新資料，剛才輸入的內容都還在，請再按一次儲存。`
+                    );
+                  } else {
+                    alert(data.error || "更新失敗");
                   }
                 }
               } catch {
@@ -1024,6 +1091,7 @@ export default function SessionPage({
                   menuImages: session.menuImages || [],
                 });
                 infoExpectedVersionRef.current = session.version;
+                infoEditBaseRef.current = infoFingerprint(session);
                 setEditingInfo(true);
               }}
               className="text-stone-400 text-xs px-1.5 py-0.5 border border-stone-200 rounded-lg shrink-0"

@@ -25,6 +25,40 @@ export async function POST() {
     const now = Date.now();
     const mutations: AtomicSheetMutation[] = [];
 
+    // 同一訂單ID若殘留多列未核銷付款（例如併發下的殘留、或人工複製列），
+    // 付款頁會把同一餐算兩次。reconcile 只在該場次再被動到時才會去重，
+    // 沒人再碰的舊場次就會一直重複計費，所以這裡也要收斂。
+    const unsettledByOrderId = new Map<
+      string,
+      { rowNumber: number; row: string[] }[]
+    >();
+    for (let index = 1; index < rows.length; index++) {
+      const row = rows[index];
+      if (isDeletedRow(row) || !row[12] || row[10] || row[9] === "TRUE") {
+        continue;
+      }
+      const list = unsettledByOrderId.get(row[12]) || [];
+      list.push({ rowNumber: index + 1, row });
+      unsettledByOrderId.set(row[12], list);
+    }
+    for (const list of unsettledByOrderId.values()) {
+      if (list.length < 2) continue;
+      // 留下最有付款進度的那一列（其餘是重複），同進度時留列號最小的
+      const progress = (row: string[]) => (row[8] === "TRUE" ? 1 : 0);
+      const sorted = [...list].sort(
+        (a, b) =>
+          progress(b.row) - progress(a.row) || a.rowNumber - b.rowNumber
+      );
+      for (const extra of sorted.slice(1)) {
+        mutations.push({
+          type: "tombstoneRow",
+          sheetName: "付款追蹤表",
+          rowNumber: extra.rowNumber,
+        });
+      }
+    }
+
+    let archived = 0;
     for (let index = 1; index < rows.length; index++) {
       const row = rows[index];
       if (
@@ -63,11 +97,15 @@ export async function POST() {
           { col: 11, value: "" },
         ],
       });
-      if (mutations.length >= MAX_ARCHIVE_ROWS_PER_RUN) break;
+      archived++;
+      if (archived >= MAX_ARCHIVE_ROWS_PER_RUN) break;
     }
 
     await applyAtomicSheetMutations(mutations);
-    return NextResponse.json({ deleted: 0, archived: mutations.length });
+    return NextResponse.json({
+      deleted: mutations.length - archived,
+      archived,
+    });
   } catch (error) {
     console.error("Failed to cleanup:", error);
     return NextResponse.json({ error: "清理失敗" }, { status: 500 });

@@ -396,7 +396,10 @@ export default function PaymentsPage() {
               method: "POST",
               body: formData,
             });
-            if (!uploadRes.ok) throw new Error("upload failed");
+            if (!uploadRes.ok) {
+              const data = await uploadRes.json().catch(() => null);
+              throw new Error(data?.error || "圖片上傳失敗");
+            }
             const { urls } = await uploadRes.json();
             const patchRes = await fetch(`/api/sessions/${target.sessionId}`, {
               method: "PATCH",
@@ -407,11 +410,21 @@ export default function PaymentsPage() {
                 requestId: newRequestId(),
               }),
             });
-            if (!patchRes.ok) throw new Error("patch failed");
+            if (!patchRes.ok) {
+              // 版本可能已過期（例如團主剛關閉場次）；先刷新再讓使用者重試，
+              // 否則下一次會拿同一個過期版本再失敗一次。
+              const data = await patchRes.json().catch(() => null);
+              await fetchPayments();
+              throw new Error(
+                `${data?.error || "更新失敗"}${
+                  patchRes.status === 409 ? "（已重新載入，請再選一次圖片）" : ""
+                }`
+              );
+            }
             await fetchPayments();
             alert("QR Code 已更新");
-          } catch {
-            alert("更新失敗，請稍後再試");
+          } catch (err) {
+            alert(err instanceof Error ? err.message : "更新失敗，請稍後再試");
           } finally {
             setUploadingQrFor(null);
             qrTargetRef.current = null;
